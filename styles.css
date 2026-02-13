@@ -59,10 +59,11 @@ header {
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.96);
-    display: flex;
-    align-items: center;
-    justify-content: center;
     z-index: 1000;
+
+    /* Center ONLY the image */
+    display: grid;
+    place-items: center;
 
     opacity: 0;
     transition: opacity 0.15s ease;
@@ -74,6 +75,41 @@ header {
 
 .hidden {
     display: none;
+}
+
+/* Enlarged image (always perfectly centered) */
+.lightbox img {
+    max-width: 96vw;
+    max-height: 90vh;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+/* Close button */
+#closeBtn {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    font-size: 32px;
+    color: #fff;
+    cursor: pointer;
+    z-index: 2;
+}
+
+/* Copy button — moved to bottom center */
+#lightboxCopy {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+
+    padding: 10px 14px;
+    font-size: 14px;
+    border: none;
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    cursor: pointer;
+    z-index: 2;
 }
 
 /* Enlarged image */
