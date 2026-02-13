@@ -1,104 +1,126 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
+/* ===== Base ===== */
 body {
-  background: #000;
-  font-family: sans-serif;
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #000;
 }
 
-/* ===== Gallery (vertical scroll) ===== */
+body.no-scroll {
+    overflow: hidden;
+}
 
+header {
+    text-align: center;
+    padding: 12px;
+    background: #111;
+    color: #fff;
+}
+
+/* ===== Gallery: tight 4-column grid ===== */
 .gallery {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 2px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    padding: 0;
 }
 
-.gallery-item {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  overflow: hidden;
+/* Square cells */
+.item {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
 }
 
-.gallery img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  background: #111;
+/* Thumbnails */
+.item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    cursor: zoom-in;
+    user-select: none;
 }
 
-/* Copy button */
-.copy-btn {
-  position: absolute;
-  bottom: 4px;
-  right: 4px;
-  font-size: 11px;
-  padding: 2px 6px;
-  background: rgba(0,0,0,0.6);
-  color: #fff;
-  border: none;
-  cursor: pointer;
+/* Thumbnail copy button (always visible) */
+.item button {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    padding: 4px 6px;
+    font-size: 11px;
+    border: none;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    cursor: pointer;
 }
 
 /* ===== Lightbox ===== */
-
 .lightbox {
-  position: fixed;
-  inset: 0;
-  background: #000;
-  display: none;
-  z-index: 9999;
-  overflow: hidden;
-  touch-action: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.96);
+    z-index: 1000;
+
+    /* Center ONLY the image */
+    display: grid;
+    place-items: center;
+
+    opacity: 0;
+    transition: opacity 0.15s ease;
 }
 
-.lightbox.active {
-  display: block;
+.lightbox:not(.hidden) {
+    opacity: 1;
 }
 
-.lightbox-inner {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 300vw;
-  height: 100%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.25s ease;
+.hidden {
+    display: none;
 }
 
-.lightbox-img {
-  width: 100vw;
-  height: 100vh;
-  object-fit: contain;
-  pointer-events: none;
+/* Enlarged image (always perfectly centered) */
+.lightbox img {
+    max-width: 96vw;
+    max-height: 90vh;
+    object-fit: contain;
+    pointer-events: none;
 }
 
-.lightbox-copy {
-  position: fixed;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 6px 12px;
-  font-size: 13px;
-  background: rgba(0,0,0,0.7);
-  color: #fff;
-  border: none;
-}  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10000;
-  padding: 6px 12px;
-  font-size: 13px;
-  background: rgba(0,0,0,0.7);
-  color: #fff;
-  border: none;
-  cursor: pointer;
+/* Close button */
+#closeBtn {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    font-size: 32px;
+    color: #fff;
+    cursor: pointer;
+    z-index: 2;
+}
+
+/* Copy button — moved to bottom center */
+#lightboxCopy {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+
+    padding: 10px 14px;
+    font-size: 14px;
+    border: none;
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    cursor: pointer;
+    z-index: 2;
+}
+
+/* ===== Responsive columns ===== */
+@media (max-width: 900px) {
+    .gallery {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 500px) {
+    .gallery {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
