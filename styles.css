@@ -97,6 +97,10 @@ header {
     cursor: pointer;
 }
 
+body.no-scroll {
+    overflow: hidden;
+}
+
 /* ===== Mobile adjustments ===== */
 @media (max-width: 800px) {
     .gallery {
