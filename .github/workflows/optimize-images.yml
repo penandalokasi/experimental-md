@@ -31,7 +31,7 @@ jobs:
               *.jpg|*.jpeg|*.png|*.JPG|*.JPEG|*.PNG)
                 echo "Processing $filename"
 
-                magick "$file[0]" \
+                convert "$file[0]" \
                   -strip \
                   -resize 1600x1600\> \
                   -quality 80 \
