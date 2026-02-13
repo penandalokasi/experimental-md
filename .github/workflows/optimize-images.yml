@@ -6,6 +6,9 @@ on:
       - "images/**"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   compress:
     runs-on: ubuntu-latest
