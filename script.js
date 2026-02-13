@@ -18,7 +18,11 @@ const apiUrl = `https://api.github.com/repos/${config.user}/${config.repo}/conte
 fetch(apiUrl)
     .then(res => res.json())
     .then(files => {
-        files.forEach(file => {
+    files
+        .filter(file => file.type === "file")
+        .filter(file => file.name.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i))
+        .sort((a, b) => b.name.localeCompare(a.name)) // newest first
+        .forEach(file => {
             if (file.type !== "file") return;
 
             // Basic image filter
