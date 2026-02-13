@@ -1,281 +1,172 @@
-const USER = "penandalokasi";
-const REPO = "experimental-md";
-const BRANCH = "main";
-const FOLDER = "images";
+/* ===== Repository config ===== */
+const config = {
+    user: "penandalokasi",
+    repo: "experimental-md",
+    branch: "main",
+    folder: "images"
+};
 
 const gallery = document.getElementById("gallery");
+const lightbox = document.getElementById("lightbox");
+const lightboxImg = document.getElementById("lightboxImg");
+const closeBtn = document.getElementById("closeBtn");
+const lightboxCopy = document.getElementById("lightboxCopy");
 
-/* ===== Load images from GitHub ===== */
+let imageList = [];
+let currentIndex = 0;
 
-async function loadImages() {
-  try {
-    const api = `https://api.github.com/repos/${USER}/${REPO}/contents/${FOLDER}?ref=${BRANCH}`;
-    const res = await fetch(api);
+/* ===== GitHub API ===== */
+const apiUrl = `https://api.github.com/repos/${config.user}/${config.repo}/contents/${config.folder}?ref=${config.branch}`;
 
-    if (!res.ok) {
-      throw new Error("GitHub API error: " + res.status);
-    }
+fetch(apiUrl)
+    .then(res => res.json())
+    .then(files => {
+        imageList = files
+            .filter(file => file.type === "file")
+            .filter(file => file.name.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i))
+            .sort((a, b) => b.name.localeCompare(a.name))
+            .map(file => file.name);
 
-    const data = await res.json();
+        imageList.forEach((name, index) => createItem(name, index));
+    })
+    .catch(err => {
+        gallery.innerHTML = "Failed to load images.";
+        console.error(err);
+    });
 
-    let files = data
-      .filter(f => f.type === "file")
-      .map(f => f.name);
+/* ===== Lazy loading observer ===== */
+const observer = new IntersectionObserver((entries, obs) => {
+    entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
 
-    if (files.length === 0) {
-      gallery.innerHTML = "<p style='color:white;padding:20px'>No images found</p>";
-      return;
-    }
+        const img = entry.target;
+        img.src = img.dataset.src;
+        obs.unobserve(img);
+    });
+}, {
+    rootMargin: "200px"
+});
 
-    /* Sort newest first */
-    files.sort().reverse();
-
-    const urls = files.map(name =>
-      `https://raw.githubusercontent.com/${USER}/${REPO}/${BRANCH}/${FOLDER}/${name}`
-    );
-
-    window.imageList = urls;
-    buildGallery(urls);
-
-  } catch (err) {
-    console.error(err);
-    gallery.innerHTML = `<p style="color:white;padding:20px">
-      Failed to load images.<br>
-      Check USER / REPO / BRANCH / FOLDER.
-    </p>`;
-  }
-}
-
-/* ===== Build gallery ===== */
-
-function buildGallery(urls) {
-  gallery.innerHTML = "";
-
-  urls.forEach((url, index) => {
-    const item = document.createElement("div");
-    item.className = "gallery-item";
+/* ===== Create thumbnails ===== */
+function createItem(filename, index) {
+    const container = document.createElement("div");
+    container.className = "item";
 
     const img = document.createElement("img");
-    img.loading = "lazy";
-    img.src = url;
+    img.dataset.src = `${config.folder}/${filename}`;
+    img.draggable = false;
+    img.alt = filename;
+
+    observer.observe(img);
+
     img.onclick = () => openLightbox(index);
 
     const btn = document.createElement("button");
-    btn.className = "copy-btn";
-    btn.textContent = "Copy";
-    btn.onclick = e => {
-      e.stopPropagation();
-      navigator.clipboard.writeText(url);
+    btn.textContent = "Copy URL";
+
+    btn.onclick = (e) => {
+        e.stopPropagation();
+        copyUrl(filename, btn);
     };
 
-    item.appendChild(img);
-    item.appendChild(btn);
-    gallery.appendChild(item);
-  });
+    container.appendChild(img);
+    container.appendChild(btn);
+    gallery.appendChild(container);
+}
+
+/* ===== URL helper ===== */
+function getRawUrl(filename) {
+    return `https://raw.githubusercontent.com/${config.user}/${config.repo}/${config.branch}/${config.folder}/${filename}`;
+}
+
+function copyUrl(filename, button) {
+    const url = getRawUrl(filename);
+    navigator.clipboard.writeText(url).then(() => {
+        if (button) {
+            const original = button.textContent;
+            button.textContent = "Copied";
+            setTimeout(() => button.textContent = original, 1200);
+        }
+    });
 }
 
 /* ===== Lightbox ===== */
-
-const lightbox = document.getElementById("lightbox");
-const inner = document.querySelector(".lightbox-inner");
-const imgMain = document.getElementById("lightbox-img");
-const imgPrev = document.getElementById("lightbox-img-prev");
-const imgNext = document.getElementById("lightbox-img-next");
-const copyBtn = document.getElementById("lightbox-copy");
-
-let currentIndex = 0;
-let startX = 0;
-let startY = 0;
-let dx = 0;
-let dy = 0;
-let dragging = false;
-
 function openLightbox(index) {
-  currentIndex = index;
-  updateLightboxImages();
-  lightbox.classList.add("active");
-  document.body.style.overflow = "hidden";
-  inner.style.transform = "translate(-50%, -50%)";
+    currentIndex = index;
+    showImage(index);
+    lightbox.classList.remove("hidden");
+    document.body.classList.add("no-scroll");
 }
 
 function closeLightbox() {
-  lightbox.classList.remove("active");
-  document.body.style.overflow = "";
+    lightbox.classList.add("hidden");
+    document.body.classList.remove("no-scroll");
 }
 
-function updateLightboxImages() {
-  const list = window.imageList;
-
-  imgMain.src = list[currentIndex];
-  imgPrev.src = list[currentIndex - 1] || "";
-  imgNext.src = list[currentIndex + 1] || "";
-
-  copyBtn.onclick = () => {
-    navigator.clipboard.writeText(list[currentIndex]);
-  };
+function showImage(index) {
+    if (index < 0 || index >= imageList.length) return;
+    currentIndex = index;
+    lightboxImg.src = `${config.folder}/${imageList[index]}`;
 }
 
-/* ===== Swipe ===== */
+closeBtn.onclick = closeLightbox;
 
-lightbox.addEventListener("pointerdown", e => {
-  dragging = true;
-  startX = e.clientX;
-  startY = e.clientY;
-  dx = 0;
-  dy = 0;
-  inner.style.transition = "none";
+lightbox.onclick = (e) => {
+    if (e.target === lightbox) closeLightbox();
+};
+
+/* Lightbox copy button (fixed) */
+lightboxCopy.onclick = () => {
+    const filename = imageList[currentIndex];
+    copyUrl(filename, lightboxCopy);
+};
+
+/* ===== Keyboard navigation ===== */
+document.addEventListener("keydown", (e) => {
+    if (lightbox.classList.contains("hidden")) return;
+
+    if (e.key === "Escape") closeLightbox();
+    if (e.key === "ArrowRight") nextImage();
+    if (e.key === "ArrowLeft") prevImage();
 });
 
-lightbox.addEventListener("pointermove", e => {
-  if (!dragging) return;
-  dx = e.clientX - startX;
-  dy = e.clientY - startY;
-  inner.style.transform = `translate(-50%, -50%) translateX(${dx}px)`;
-});
-
-lightbox.addEventListener("pointerup", () => {
-  if (!dragging) return;
-  dragging = false;
-
-  const threshold = window.innerWidth * 0.2;
-
-  if (Math.abs(dy) > 120 && Math.abs(dy) > Math.abs(dx)) {
-    closeLightbox();
-    return;
-  }
-
-  if (dx < -threshold && currentIndex < window.imageList.length - 1) {
-    currentIndex++;
-    slide(-window.innerWidth);
-  } else if (dx > threshold && currentIndex > 0) {
-    currentIndex--;
-    slide(window.innerWidth);
-  } else {
-    slide(0);
-  }
-});
-
-function slide(offset) {
-  inner.style.transition = "transform 0.25s ease";
-  inner.style.transform = `translate(-50%, -50%) translateX(${offset}px)`;
-
-  setTimeout(() => {
-    updateLightboxImages();
-    inner.style.transition = "none";
-    inner.style.transform = "translate(-50%, -50%)";
-  }, 250);
+/* ===== Navigation ===== */
+function nextImage() {
+    if (currentIndex < imageList.length - 1) {
+        showImage(currentIndex + 1);
+    }
 }
 
-lightbox.addEventListener("click", e => {
-  if (e.target === lightbox) closeLightbox();
-});
-
-lightbox.addEventListener("touchmove", e => {
-  e.preventDefault();
-}, { passive: false });
-
-/* Start */
-loadImages();}
-
-/* Swipe system */
-
-lightbox.addEventListener("pointerdown", e => {
-  dragging = true;
-  startX = e.clientX;
-  startY = e.clientY;
-  deltaX = 0;
-  deltaY = 0;
-  inner.style.transition = "none";
-});
-
-lightbox.addEventListener("pointermove", e => {
-  if (!dragging) return;
-
-  deltaX = e.clientX - startX;
-  deltaY = e.clientY - startY;
-
-  inner.style.transform =
-    `translate(-50%, -50%) translateX(${deltaX}px)`;
-});
-
-lightbox.addEventListener("pointerup", () => {
-  if (!dragging) return;
-  dragging = false;
-
-  const threshold = window.innerWidth * 0.2;
-
-  /* Swipe down to close */
-  if (Math.abs(deltaY) > 120 && Math.abs(deltaY) > Math.abs(deltaX)) {
-    closeLightbox();
-    return;
-  }
-
-  /* Left */
-  if (deltaX < -threshold && currentIndex < window.imageList.length - 1) {
-    currentIndex++;
-    animateTo(-window.innerWidth);
-  }
-  /* Right */
-  else if (deltaX > threshold && currentIndex > 0) {
-    currentIndex--;
-    animateTo(window.innerWidth);
-  }
-  else {
-    animateTo(0);
-  }
-});
-
-function animateTo(offset) {
-  inner.style.transition = "transform 0.25s ease";
-  inner.style.transform =
-    `translate(-50%, -50%) translateX(${offset}px)`;
-
-  setTimeout(() => {
-    updateLightboxImages();
-    inner.style.transition = "none";
-    inner.style.transform = "translate(-50%, -50%) translateX(0)";
-  }, 250);
+function prevImage() {
+    if (currentIndex > 0) {
+        showImage(currentIndex - 1);
+    }
 }
 
-/* Click outside to close */
-lightbox.addEventListener("click", e => {
-  if (e.target === lightbox) closeLightbox();
-});
+/* ===== Touch gestures ===== */
+let startX = 0;
+let startY = 0;
 
-/* Prevent background scroll on mobile */
-lightbox.addEventListener("touchmove", e => {
-  e.preventDefault();
-}, { passive: false });
-
-/* Start */
-loadImages();
-    resetPosition();
-}
-
-/* Touch events */
 lightbox.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    handleStart(e.touches[0].clientX, e.touches[0].clientY);
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
 }, { passive: false });
 
 lightbox.addEventListener("touchmove", (e) => {
-    e.preventDefault();
-    handleMove(e.touches[0].clientX, e.touches[0].clientY);
+    e.preventDefault(); // prevents background scroll
 }, { passive: false });
 
 lightbox.addEventListener("touchend", (e) => {
-    handleEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
-});
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
 
-/* Mouse events (desktop drag) */
-lightbox.addEventListener("mousedown", (e) => {
-    handleStart(e.clientX, e.clientY);
-});
+    const dx = endX - startX;
+    const dy = endY - startY;
 
-window.addEventListener("mousemove", (e) => {
-    handleMove(e.clientX, e.clientY);
-});
-
-window.addEventListener("mouseup", (e) => {
-    handleEnd(e.clientX, e.clientY);
+    if (Math.abs(dx) > Math.abs(dy)) {
+        if (dx > 50) prevImage();
+        if (dx < -50) nextImage();
+    } else {
+        if (dy > 80) closeLightbox();
+    }
 });
