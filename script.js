@@ -50,8 +50,7 @@ function createItem(filename) {
     btn.onclick = (e) => {
         e.stopPropagation();
 
-        const url = `https://github.com/${config.user}/${config.repo}/blob/${config.branch}/${config.folder}/${filename}`;
-
+        const url = `https://raw.githubusercontent.com/${config.user}/${config.repo}/${config.branch}/${config.folder}/${filename}`;
         navigator.clipboard.writeText(url).then(() => {
             btn.textContent = "Copied";
             setTimeout(() => btn.textContent = "Copy URL", 1200);
