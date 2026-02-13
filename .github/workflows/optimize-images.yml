@@ -1,38 +1,58 @@
-name: Optimize Images
+name: Compress Images
 
 on:
   push:
     paths:
-      - 'images/**'
+      - "images/**"
+  workflow_dispatch:
 
 jobs:
   compress:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install ImageMagick
-        run: sudo apt-get install imagemagick -y
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
 
-      - name: Create optimized folder
-        run: mkdir -p images-optimized
-
-      - name: Compress images
+      - name: Compress images to WebP
         run: |
+          mkdir -p images-optimized
+
           for file in images/*; do
+            [ -f "$file" ] || continue
+
             filename=$(basename "$file")
-            convert "$file" \
-              -resize 2000x2000\> \
-              -quality 75 \
-              "images-optimized/${filename%.*}.webp"
+            name="${filename%.*}"
+
+            case "$file" in
+              *.jpg|*.jpeg|*.png|*.JPG|*.JPEG|*.PNG)
+                echo "Processing $filename"
+
+                magick "$file[0]" \
+                  -strip \
+                  -resize 1600x1600\> \
+                  -quality 80 \
+                  "images-optimized/$name.webp"
+                ;;
+              *)
+                echo "Skipping $filename"
+                ;;
+            esac
           done
 
       - name: Commit optimized images
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
+
           git add images-optimized
-          git diff --quiet && git diff --staged --quiet || git commit -m "Auto optimize images"
-          git push
+
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Auto-compress images"
+            git push
+          fi
