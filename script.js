@@ -34,14 +34,30 @@ fetch(apiUrl)
         console.error(err);
     });
 
+/* ===== Lazy loading observer ===== */
+const observer = new IntersectionObserver((entries, obs) => {
+    entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+
+        const img = entry.target;
+        img.src = img.dataset.src;
+        obs.unobserve(img);
+    });
+}, {
+    rootMargin: "200px"
+});
+
 /* ===== Create thumbnails ===== */
 function createItem(filename, index) {
     const container = document.createElement("div");
     container.className = "item";
 
     const img = document.createElement("img");
-    img.src = `${config.folder}/${filename}`;
+    img.dataset.src = `${config.folder}/${filename}`;
     img.draggable = false;
+    img.alt = filename;
+
+    observer.observe(img);
 
     img.onclick = () => openLightbox(index);
 
@@ -67,16 +83,17 @@ function copyUrl(filename, button) {
     const url = getRawUrl(filename);
     navigator.clipboard.writeText(url).then(() => {
         if (button) {
+            const original = button.textContent;
             button.textContent = "Copied";
-            setTimeout(() => button.textContent = "Copy URL", 1200);
+            setTimeout(() => button.textContent = original, 1200);
         }
     });
 }
 
-/* ===== Lightbox controls ===== */
+/* ===== Lightbox ===== */
 function openLightbox(index) {
     currentIndex = index;
-    lightboxImg.src = `${config.folder}/${imageList[index]}`;
+    showImage(index);
     lightbox.classList.remove("hidden");
     document.body.classList.add("no-scroll");
 }
@@ -86,12 +103,25 @@ function closeLightbox() {
     document.body.classList.remove("no-scroll");
 }
 
+function showImage(index) {
+    if (index < 0 || index >= imageList.length) return;
+    currentIndex = index;
+    lightboxImg.src = `${config.folder}/${imageList[index]}`;
+}
+
 closeBtn.onclick = closeLightbox;
 
 lightbox.onclick = (e) => {
     if (e.target === lightbox) closeLightbox();
 };
 
+/* Lightbox copy button (fixed) */
+lightboxCopy.onclick = () => {
+    const filename = imageList[currentIndex];
+    copyUrl(filename, lightboxCopy);
+};
+
+/* ===== Keyboard navigation ===== */
 document.addEventListener("keydown", (e) => {
     if (lightbox.classList.contains("hidden")) return;
 
@@ -100,24 +130,17 @@ document.addEventListener("keydown", (e) => {
     if (e.key === "ArrowLeft") prevImage();
 });
 
-/* Lightbox copy button */
-lightboxCopy.onclick = () => {
-    copyUrl(imageList[currentIndex], lightboxCopy);
-};
-
 /* ===== Navigation ===== */
-function showImage(index) {
-    if (index < 0 || index >= imageList.length) return;
-    currentIndex = index;
-    lightboxImg.src = `${config.folder}/${imageList[index]}`;
-}
-
 function nextImage() {
-    showImage(currentIndex + 1);
+    if (currentIndex < imageList.length - 1) {
+        showImage(currentIndex + 1);
+    }
 }
 
 function prevImage() {
-    showImage(currentIndex - 1);
+    if (currentIndex > 0) {
+        showImage(currentIndex - 1);
+    }
 }
 
 /* ===== Touch gestures ===== */
@@ -130,8 +153,7 @@ lightbox.addEventListener("touchstart", (e) => {
 }, { passive: false });
 
 lightbox.addEventListener("touchmove", (e) => {
-    // Prevent page from scrolling while swiping
-    e.preventDefault();
+    e.preventDefault(); // prevents background scroll
 }, { passive: false });
 
 lightbox.addEventListener("touchend", (e) => {
@@ -142,11 +164,9 @@ lightbox.addEventListener("touchend", (e) => {
     const dy = endY - startY;
 
     if (Math.abs(dx) > Math.abs(dy)) {
-        // Horizontal swipe
         if (dx > 50) prevImage();
         if (dx < -50) nextImage();
     } else {
-        // Vertical swipe
         if (dy > 80) closeLightbox();
     }
 });
