@@ -1,142 +1,170 @@
-<script>
-const optimizedBase = "/experimental-md/images-optimized/";
-const originalBase = "https://raw.githubusercontent.com/penandalokasi/experimental-md/main/images/";
-const jsonPath = "/experimental-md/images-optimized/index.json";
+/* ===== Config ===== */
+const config = {
+    user: "penandalokasi",
+    repo: "experimental-md",
+    branch: "main",
+    displayFolder: "images-optimized",
+    originalFolder: "images"
+};
 
+/* ===== Elements ===== */
 const gallery = document.getElementById("gallery");
+const lightbox = document.getElementById("lightbox");
+const lightboxImg = document.getElementById("lightboxImg");
+const closeBtn = document.getElementById("closeBtn");
+const lightboxCopy = document.getElementById("lightboxCopy");
 
-fetch(jsonPath)
-  .then(res => res.json())
-  .then(files => {
-    files.forEach((file, index) => {
-      const optimizedUrl = optimizedBase + file.optimized;
-      const originalUrl = originalBase + file.original;
+let imageList = [];
+let currentIndex = 0;
 
-      const item = document.createElement("div");
-      item.className = "gallery-item";
+/* ===== Load index.json ===== */
+fetch("images-optimized/index.json")
+    .then(res => {
+        if (!res.ok) throw new Error("index.json not found");
+        return res.json();
+    })
+    .then(files => {
+        if (!Array.isArray(files)) {
+            gallery.innerHTML = "index.json format error";
+            return;
+        }
 
-      // Detect video
-      const isVideo = file.optimized.endsWith(".webm");
+        imageList = files.sort((a, b) =>
+            b.optimized.localeCompare(a.optimized)
+        );
 
-      let media;
+        if (imageList.length === 0) {
+            gallery.innerHTML = "No images in index.json";
+            return;
+        }
 
-      if (isVideo) {
+        imageList.forEach((item, index) => createItem(item, index));
+    })
+    .catch(err => {
+        console.error(err);
+        gallery.innerHTML = "Failed to load images-optimized/index.json";
+    });
+
+/* ===== Lazy loading ===== */
+const observer = new IntersectionObserver((entries, obs) => {
+    entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+
+        const el = entry.target;
+        el.src = el.dataset.src;
+
+        if (el.tagName === "VIDEO") {
+            el.play().catch(() => {});
+        }
+
+        obs.unobserve(el);
+    });
+}, { rootMargin: "200px" });
+
+/* ===== Create thumbnails ===== */
+function createItem(item, index) {
+    const container = document.createElement("div");
+    container.className = "item";
+
+    let media;
+
+    if (item.optimized.match(/\.webm$/i)) {
         media = document.createElement("video");
-        media.src = optimizedUrl;
         media.muted = true;
         media.loop = true;
         media.playsInline = true;
-        media.preload = "metadata";
-        media.className = "thumb";
-        media.addEventListener("mouseenter", () => media.play());
-        media.addEventListener("mouseleave", () => media.pause());
-      } else {
+        media.autoplay = true;
+    } else {
         media = document.createElement("img");
-        media.src = optimizedUrl;
-        media.loading = "lazy";
-        media.className = "thumb";
-      }
+        media.draggable = false;
+    }
 
-      // Open lightbox
-      media.addEventListener("click", () => openLightbox(index));
+    media.dataset.src = `images-optimized/${item.optimized}`;
+    media.alt = item.optimized;
 
-      // Copy button (always visible)
-      const copyBtn = document.createElement("button");
-      copyBtn.className = "copy-btn";
-      copyBtn.textContent = "Copy URL";
-      copyBtn.onclick = (e) => {
+    observer.observe(media);
+    media.onclick = () => openLightbox(index);
+
+    const btn = document.createElement("button");
+    btn.textContent = "Copy URL";
+    btn.onclick = (e) => {
         e.stopPropagation();
-        navigator.clipboard.writeText(originalUrl);
-      };
+        copyUrl(item, btn);
+    };
 
-      item.appendChild(media);
-      item.appendChild(copyBtn);
-      gallery.appendChild(item);
+    container.appendChild(media);
+    container.appendChild(btn);
+    gallery.appendChild(container);
+}
+
+/* ===== Copy original URL ===== */
+function copyUrl(item, button) {
+    const url = `https://raw.githubusercontent.com/${config.user}/${config.repo}/${config.branch}/${config.originalFolder}/${item.original}`;
+
+    navigator.clipboard.writeText(url).then(() => {
+        if (button) {
+            const original = button.textContent;
+            button.textContent = "Copied";
+            setTimeout(() => button.textContent = original, 1200);
+        }
     });
+}
 
-    window.galleryData = files;
-  });
-
-/* Lightbox */
-
-const lightbox = document.getElementById("lightbox");
-const lightboxContent = document.getElementById("lightbox-content");
-const lightboxCopy = document.getElementById("lightbox-copy");
-
-let currentIndex = 0;
+/* ===== Lightbox ===== */
+let lightboxVideo = null;
 
 function openLightbox(index) {
-  currentIndex = index;
-  showLightboxItem();
-  lightbox.classList.add("active");
+    currentIndex = index;
+    showImage(index);
+    lightbox.classList.remove("hidden");
+    document.body.classList.add("no-scroll");
 }
 
 function closeLightbox() {
-  lightbox.classList.remove("active");
-  lightboxContent.innerHTML = "";
-}
+    lightbox.classList.add("hidden");
+    document.body.classList.remove("no-scroll");
 
-function showLightboxItem() {
-  const file = window.galleryData[currentIndex];
-  const optimizedUrl = optimizedBase + file.optimized;
-  const originalUrl = originalBase + file.original;
-
-  lightboxContent.innerHTML = "";
-
-  const isVideo = file.optimized.endsWith(".webm");
-
-  let media;
-
-  if (isVideo) {
-    media = document.createElement("video");
-    media.src = optimizedUrl;
-    media.controls = true;
-    media.autoplay = true;
-    media.loop = true;
-    media.className = "lightbox-media";
-  } else {
-    media = document.createElement("img");
-    media.src = optimizedUrl;
-    media.className = "lightbox-media";
-  }
-
-  lightboxContent.appendChild(media);
-
-  // Copy ORIGINAL url
-  lightboxCopy.onclick = () => {
-    navigator.clipboard.writeText(originalUrl);
-  };
-}
-
-/* Navigation */
-
-document.getElementById("lightbox-close").onclick = closeLightbox;
-document.getElementById("lightbox-prev").onclick = () => {
-  currentIndex = (currentIndex - 1 + window.galleryData.length) % window.galleryData.length;
-  showLightboxItem();
-};
-document.getElementById("lightbox-next").onclick = () => {
-  currentIndex = (currentIndex + 1) % window.galleryData.length;
-  showLightboxItem();
-};
-
-/* Swipe support */
-
-let startX = 0;
-lightbox.addEventListener("touchstart", e => {
-  startX = e.touches[0].clientX;
-});
-
-lightbox.addEventListener("touchend", e => {
-  const endX = e.changedTouches[0].clientX;
-  const diff = startX - endX;
-
-  if (Math.abs(diff) > 50) {
-    if (diff > 0) {
-      document.getElementById("lightbox-next").click();
-    } else {
-      document.getElementById("lightbox-prev").click();
+    if (lightboxVideo) {
+        lightboxVideo.pause();
+        lightboxVideo.remove();
+        lightboxVideo = null;
     }
-  }
-});
-</script>
+}
+
+function showImage(index) {
+    const item = imageList[index];
+    const src = `images-optimized/${item.optimized}`;
+
+    if (lightboxVideo) {
+        lightboxVideo.pause();
+        lightboxVideo.remove();
+        lightboxVideo = null;
+    }
+
+    if (item.optimized.match(/\.webm$/i)) {
+        lightboxImg.style.display = "none";
+
+        lightboxVideo = document.createElement("video");
+        lightboxVideo.src = src;
+        lightboxVideo.controls = true;
+        lightboxVideo.autoplay = true;
+        lightboxVideo.loop = true;
+        lightboxVideo.style.maxWidth = "90vw";
+        lightboxVideo.style.maxHeight = "90vh";
+
+        lightbox.appendChild(lightboxVideo);
+    } else {
+        lightboxImg.style.display = "block";
+        lightboxImg.src = src;
+    }
+}
+
+closeBtn.onclick = closeLightbox;
+
+lightbox.onclick = (e) => {
+    if (e.target === lightbox) closeLightbox();
+};
+
+lightboxCopy.onclick = () => {
+    copyUrl(imageList[currentIndex], lightboxCopy);
+};
