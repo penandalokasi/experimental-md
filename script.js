@@ -98,31 +98,53 @@ function createLightboxEl(item){
 }
 
 function openLightbox(index){
-  currentIndex=index;
-  currentEl=createLightboxEl(imageList[currentIndex]);
-  lightbox.innerHTML="";
+  currentIndex = index;
+  currentEl = createLightboxEl(imageList[currentIndex]);
+  lightbox.innerHTML = "";
   lightbox.appendChild(currentEl);
 
-  // Add X close button
+  // Add X close button (top-right)
   const xBtn = document.createElement("button");
   xBtn.textContent = "✕";
   Object.assign(xBtn.style,{
-    position:"absolute",
-    top:"10px",
-    right:"10px",
-    zIndex:"20",
-    fontSize:"1.8rem",
-    background:"rgba(0,0,0,0.5)",
-    color:"#fff",
-    border:"none",
-    borderRadius:"3px",
-    padding:"5px 10px",
-    cursor:"pointer",
-    outline: "none",                     // remove focus outline
-    WebkitTapHighlightColor: "transparent" // remove blue tap highlight on mobile
+    position: "absolute",
+    top: "10px",
+    right: "10px",
+    zIndex: "20",
+    fontSize: "1.8rem",
+    background: "rgba(0,0,0,0.5)",
+    color: "#fff",
+    border: "none",
+    borderRadius: "3px",
+    padding: "5px 10px",
+    cursor: "pointer",
+    outline: "none",
+    WebkitTapHighlightColor: "transparent"
   });
   xBtn.onclick = closeLightbox;
   lightbox.appendChild(xBtn);
+
+  // Add Copy URL button at bottom-center
+  const copyBtn = document.createElement("button");
+  copyBtn.textContent = "Copy URL";
+  Object.assign(copyBtn.style,{
+    position: "absolute",
+    bottom: "20px",
+    left: "50%",
+    transform: "translateX(-50%)",
+    zIndex: "20",
+    fontSize: "1rem",
+    background: "rgba(0,0,0,0.5)",
+    color: "#fff",
+    border: "none",
+    borderRadius: "3px",
+    padding: "5px 10px",
+    cursor: "pointer",
+    outline: "none",
+    WebkitTapHighlightColor: "transparent"
+  });
+  copyBtn.onclick = () => copyUrl(imageList[currentIndex], copyBtn);
+  lightbox.appendChild(copyBtn);
 
   lightbox.classList.remove("hidden");
   document.body.classList.add("no-scroll");
@@ -197,8 +219,8 @@ function addSideNav(){
       cursor:"pointer",
       zIndex:"10",
       background:"rgba(0,0,0,0)",
-      outline: "none",                     // remove focus outline
-      WebkitTapHighlightColor: "transparent" // remove blue tap highlight on mobile
+      outline: "none",
+      WebkitTapHighlightColor: "transparent"
     });
     lightbox.appendChild(el);
   });
@@ -208,9 +230,9 @@ function addSideNav(){
   right.onclick=()=>navigate("next");
 }
 
-/* ===== Copy Button ===== */
+/* ===== Copy Button (thumbnail) ===== */
 lightboxCopy.onclick=()=>copyUrl(imageList[currentIndex],lightboxCopy);
 
-/* ===== Close Button ===== */
+/* ===== Close Button (optional external) ===== */
 closeBtn.onclick=closeLightbox;
 lightbox.onclick=e=>{if(e.target===lightbox) closeLightbox();}
