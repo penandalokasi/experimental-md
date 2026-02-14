@@ -105,6 +105,7 @@ function openLightbox(index){
   lightbox.classList.remove("hidden");
   document.body.classList.add("no-scroll");
   addSideNav();
+  addCloseButton();
 }
 
 function closeLightbox(){
@@ -155,6 +156,10 @@ const swipeThreshold=50;
 lightbox.addEventListener("touchstart",e=>{
   if(e.touches.length===1){touchStartX=e.touches[0].clientX; touchStartY=e.touches[0].clientY;}
 },{passive:true});
+lightbox.addEventListener("touchmove",e=>{
+  // Prevent main page from scrolling while swiping on lightbox
+  if(e.touches.length===1) e.preventDefault();
+},{passive:false});
 lightbox.addEventListener("touchend",e=>{
   const deltaX=e.changedTouches[0].clientX-touchStartX;
   const deltaY=e.changedTouches[0].clientY-touchStartY;
@@ -183,3 +188,24 @@ lightboxCopy.onclick=()=>copyUrl(imageList[currentIndex],lightboxCopy);
 /* ===== Close Button ===== */
 closeBtn.onclick=closeLightbox;
 lightbox.onclick=e=>{if(e.target===lightbox) closeLightbox();}
+
+/* ===== Extra Close Button Inside Lightbox ===== */
+function addCloseButton(){
+  const btn=document.createElement("button");
+  btn.textContent="✕";
+  Object.assign(btn.style,{
+    position:"absolute",
+    top:"10px",
+    right:"10px",
+    zIndex:"20",
+    fontSize:"24px",
+    background:"rgba(0,0,0,0.5)",
+    color:"#fff",
+    border:"none",
+    borderRadius:"4px",
+    padding:"4px 8px",
+    cursor:"pointer"
+  });
+  btn.onclick=closeLightbox;
+  lightbox.appendChild(btn);
+}
