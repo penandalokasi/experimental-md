@@ -33,7 +33,7 @@ header {
 /* Tablet */
 @media (max-width: 900px) {
     .gallery {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(5, 1fr);
     }
 }
 
