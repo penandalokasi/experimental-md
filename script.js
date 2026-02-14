@@ -17,9 +17,10 @@ const lightboxCopy = document.getElementById("lightboxCopy");
 let imageList = [];
 let currentIndex = 0;
 let lightboxVideo = null;
+let isAnimating = false; // Prevent overlapping animations
 
 /* ===== Load index.json ===== */
-fetch("images-optimized/index.json")
+fetch(`${config.displayFolder}/index.json`)
     .then(res => {
         if (!res.ok) throw new Error("index.json not found");
         return res.json();
@@ -41,7 +42,7 @@ fetch("images-optimized/index.json")
     })
     .catch(err => {
         console.error(err);
-        gallery.innerHTML = "Failed to load images-optimized/index.json";
+        gallery.innerHTML = `Failed to load ${config.displayFolder}/index.json`;
     });
 
 /* ===== Lazy loading ===== */
@@ -78,7 +79,7 @@ function createItem(item, index) {
         media.draggable = false;
     }
 
-    media.dataset.src = `images-optimized/${item.optimized}`;
+    media.dataset.src = `${config.displayFolder}/${item.optimized}`;
     media.alt = item.optimized;
 
     observer.observe(media);
@@ -128,9 +129,20 @@ function closeLightbox() {
     }
 }
 
+/* ===== Show Image with Smooth Animation ===== */
 function showImage(index, direction) {
+    if (isAnimating) return;
+    isAnimating = true;
+
     const item = imageList[index];
-    const src = `images-optimized/${item.optimized}`;
+    const src = `${config.displayFolder}/${item.optimized}`;
+
+    // Remove previous video if exists
+    if (lightboxVideo) {
+        lightboxVideo.pause();
+        lightboxVideo.remove();
+        lightboxVideo = null;
+    }
 
     let newEl;
     if (item.optimized.match(/\.webm$/i)) {
@@ -152,54 +164,53 @@ function showImage(index, direction) {
         newEl = lightboxImg;
     }
 
-    // Animate transition if direction specified
-    if (direction) {
-        const distance = direction === "next" ? "100%" : "-100%";
-
-        // Create temporary clone of previous element
-        let prevEl;
-        if (lightboxVideo && lightboxVideo !== newEl) prevEl = lightboxVideo.cloneNode(true);
-        else if (lightboxImg !== newEl) prevEl = lightboxImg.cloneNode(true);
-
-        if (prevEl) {
-            prevEl.style.position = "absolute";
-            prevEl.style.top = "50%";
-            prevEl.style.left = "50%";
-            prevEl.style.transform = "translate(-50%, -50%)";
-            prevEl.style.transition = "transform 0.3s ease";
-            lightbox.appendChild(prevEl);
-
-            // Animate previous element out
-            requestAnimationFrame(() => {
-                prevEl.style.transform = `translate(${direction === "next" ? "-150%" : "150%"}, -50%)`;
-            });
-
-            // Remove clone after animation
-            setTimeout(() => prevEl.remove(), 300);
-        }
-
-        // Animate new element in
-        if (newEl !== lightboxImg) {
-            newEl.style.position = "absolute";
-            newEl.style.top = "50%";
-            newEl.style.left = direction === "next" ? "150%" : "-150%";
-            newEl.style.transform = "translate(-50%, -50%)";
-            newEl.style.transition = "transform 0.3s ease";
-
-            requestAnimationFrame(() => {
-                newEl.style.left = "50%";
-                newEl.style.transform = "translate(-50%, -50%)";
-            });
-
-            setTimeout(() => {
-                newEl.style.position = "";
-                newEl.style.top = "";
-                newEl.style.left = "";
-                newEl.style.transform = "";
-                newEl.style.transition = "";
-            }, 300);
-        }
+    if (!direction) {
+        isAnimating = false; // First open, no animation
+        return;
     }
+
+    const distance = direction === "next" ? "150%" : "-150%";
+
+    // Clone previous element for animation out
+    let prevEl;
+    if (newEl !== lightboxImg && lightboxVideo) prevEl = lightboxVideo.cloneNode(true);
+    else if (newEl === lightboxImg) prevEl = lightboxImg.cloneNode(true);
+
+    if (prevEl) {
+        prevEl.style.position = "absolute";
+        prevEl.style.top = "50%";
+        prevEl.style.left = "50%";
+        prevEl.style.transform = "translate(-50%, -50%)";
+        prevEl.style.transition = "transform 0.3s ease";
+        lightbox.appendChild(prevEl);
+
+        requestAnimationFrame(() => {
+            prevEl.style.transform = `translate(${direction === "next" ? "-150%" : "150%"}, -50%)`;
+        });
+
+        setTimeout(() => prevEl.remove(), 300);
+    }
+
+    // Animate new element in
+    newEl.style.position = "absolute";
+    newEl.style.top = "50%";
+    newEl.style.left = direction === "next" ? "150%" : "-150%";
+    newEl.style.transform = "translate(-50%, -50%)";
+    newEl.style.transition = "transform 0.3s ease";
+
+    requestAnimationFrame(() => {
+        newEl.style.left = "50%";
+        newEl.style.transform = "translate(-50%, -50%)";
+    });
+
+    setTimeout(() => {
+        newEl.style.position = "";
+        newEl.style.top = "";
+        newEl.style.left = "";
+        newEl.style.transform = "";
+        newEl.style.transition = "";
+        isAnimating = false;
+    }, 300);
 }
 
 /* ===== Buttons ===== */
@@ -220,6 +231,18 @@ let touchEndX = 0;
 let touchEndY = 0;
 const swipeThreshold = 50;
 
+function nextImage() {
+    if (isAnimating || currentIndex >= imageList.length - 1) return;
+    currentIndex++;
+    showImage(currentIndex, "next");
+}
+
+function prevImage() {
+    if (isAnimating || currentIndex <= 0) return;
+    currentIndex--;
+    showImage(currentIndex, "prev");
+}
+
 lightbox.addEventListener("touchstart", (e) => {
     if (e.touches.length === 1) {
         touchStartX = e.touches[0].clientX;
@@ -237,13 +260,8 @@ lightbox.addEventListener("touchend", (e) => {
     if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > swipeThreshold) {
         if (deltaY > 0) closeLightbox(); // Swipe down
     } else if (Math.abs(deltaX) > swipeThreshold) {
-        if (deltaX < 0 && currentIndex < imageList.length - 1) {
-            currentIndex++;
-            showImage(currentIndex, "next");
-        } else if (deltaX > 0 && currentIndex > 0) {
-            currentIndex--;
-            showImage(currentIndex, "prev");
-        }
+        if (deltaX < 0) nextImage();
+        else if (deltaX > 0) prevImage();
     }
 }, {passive: true});
 
@@ -253,16 +271,10 @@ document.addEventListener("keydown", (e) => {
 
     switch (e.key) {
         case "ArrowRight":
-            if (currentIndex < imageList.length - 1) {
-                currentIndex++;
-                showImage(currentIndex, "next");
-            }
+            nextImage();
             break;
         case "ArrowLeft":
-            if (currentIndex > 0) {
-                currentIndex--;
-                showImage(currentIndex, "prev");
-            }
+            prevImage();
             break;
         case "Escape":
             closeLightbox();
