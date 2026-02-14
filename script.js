@@ -16,6 +16,7 @@ const lightboxCopy = document.getElementById("lightboxCopy");
 
 let imageList = [];
 let currentIndex = 0;
+let lightboxVideo = null;
 
 /* ===== Load index.json ===== */
 fetch("images-optimized/index.json")
@@ -29,9 +30,7 @@ fetch("images-optimized/index.json")
             return;
         }
 
-        imageList = files.sort((a, b) =>
-            b.optimized.localeCompare(a.optimized)
-        );
+        imageList = files.sort((a, b) => b.optimized.localeCompare(a.optimized));
 
         if (imageList.length === 0) {
             gallery.innerHTML = "No images in index.json";
@@ -111,11 +110,9 @@ function copyUrl(item, button) {
 }
 
 /* ===== Lightbox ===== */
-let lightboxVideo = null;
-
 function openLightbox(index) {
     currentIndex = index;
-    showImage(index);
+    showImage(index, null);
     lightbox.classList.remove("hidden");
     document.body.classList.add("no-scroll");
 }
@@ -131,40 +128,60 @@ function closeLightbox() {
     }
 }
 
-function showImage(index) {
+function showImage(index, direction) {
     const item = imageList[index];
     const src = `images-optimized/${item.optimized}`;
 
+    // Remove existing video
     if (lightboxVideo) {
         lightboxVideo.pause();
         lightboxVideo.remove();
         lightboxVideo = null;
     }
 
+    // Create the new element (img or video)
+    let newEl;
     if (item.optimized.match(/\.webm$/i)) {
         lightboxImg.style.display = "none";
-
-        lightboxVideo = document.createElement("video");
-        lightboxVideo.src = src;
-        lightboxVideo.controls = true;
-        lightboxVideo.autoplay = true;
-        lightboxVideo.loop = true;
-        lightboxVideo.style.maxWidth = "90vw";
-        lightboxVideo.style.maxHeight = "90vh";
-
-        lightbox.appendChild(lightboxVideo);
+        newEl = document.createElement("video");
+        newEl.src = src;
+        newEl.controls = true;
+        newEl.autoplay = true;
+        newEl.loop = true;
+        newEl.style.maxWidth = "90vw";
+        newEl.style.maxHeight = "90vh";
+        lightbox.appendChild(newEl);
+        lightboxVideo = newEl;
     } else {
+        newEl = lightboxImg;
         lightboxImg.style.display = "block";
         lightboxImg.src = src;
     }
+
+    // Animation
+    if (direction) {
+        const distance = direction === "next" ? "100%" : "-100%";
+        newEl.style.transition = "none";
+        newEl.style.transform = `translateX(${distance})`;
+        requestAnimationFrame(() => {
+            newEl.style.transition = "transform 0.3s ease";
+            newEl.style.transform = "translateX(0)";
+            if (lightboxImg !== newEl) {
+                // Animate previous element out
+                const prevEl = lightboxImg.style.display === "block" ? lightboxImg : lightboxVideo;
+                prevEl.style.transition = "transform 0.3s ease";
+                prevEl.style.transform = direction === "next" ? "translateX(-100%)" : "translateX(100%)";
+                setTimeout(() => {
+                    if (prevEl !== lightboxImg) prevEl.remove();
+                    prevEl.style.transition = "";
+                    prevEl.style.transform = "";
+                }, 300);
+            }
+        });
+    }
 }
 
+/* ===== Buttons ===== */
 closeBtn.onclick = closeLightbox;
 
-lightbox.onclick = (e) => {
-    if (e.target === lightbox) closeLightbox();
-};
-
-lightboxCopy.onclick = () => {
-    copyUrl(imageList[currentIndex], lightboxCopy);
-};
+lightbox.onclick = (e) =>
