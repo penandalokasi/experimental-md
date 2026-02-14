@@ -62,7 +62,7 @@ jobs:
                   echo "Recompressing $filename (quality 65)"
                   convert "$file[0]" \
                     -strip \
-                    -resize 1600x1600\> \
+                    -resize 400x400\> \
                     -colors 256 \
                     -quality 65 \
                     "$output"
@@ -74,7 +74,7 @@ jobs:
                   echo "Recompressing $filename (quality 60)"
                   convert "$file[0]" \
                     -strip \
-                    -resize 1600x1600\> \
+                    -resize 200x200\> \
                     -colors 256 \
                     -quality 60 \
                     "$output"
@@ -93,7 +93,7 @@ jobs:
                 echo "Processing GIF $filename"
 
                 ffmpeg -y -loglevel error -i "$file" \
-                  -vf "scale=1600:-2:flags=lanczos,fps=15" \
+                  -vf "scale=512:-2:flags=lanczos,fps=15" \
                   -c:v libvpx-vp9 \
                   -b:v 0 \
                   -crf 35 \
