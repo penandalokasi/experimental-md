@@ -1,4 +1,4 @@
-name: Compress Images
+name: Optimize Media
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  compress:
+  optimize:
     runs-on: ubuntu-latest
 
     steps:
@@ -20,9 +20,9 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y imagemagick ffmpeg
+          sudo apt-get install -y imagemagick ffmpeg jq
 
-      - name: Optimize media (images + gifs)
+      - name: Optimize media
         run: |
           mkdir -p images-optimized
 
@@ -36,7 +36,7 @@ jobs:
 
             case "$ext_lower" in
 
-              # Static images → WebP
+              # JPG / PNG → WebP
               jpg|jpeg|png)
                 output="images-optimized/$name.webp"
 
@@ -54,7 +54,7 @@ jobs:
                   "$output"
                 ;;
 
-              # GIF → looping WebM
+              # GIF → WebM
               gif)
                 output="images-optimized/$name.webm"
 
@@ -63,7 +63,7 @@ jobs:
                   continue
                 fi
 
-                echo "Converting GIF to WebM $filename"
+                echo "Converting GIF $filename"
 
                 ffmpeg -y -i "$file" \
                   -vf "scale=1600:-2:flags=lanczos,fps=15" \
@@ -81,7 +81,18 @@ jobs:
             esac
           done
 
-      - name: Commit optimized files
+      - name: Generate index.json
+        run: |
+          echo "Generating index.json"
+
+          cd images-optimized
+
+          # List only media files, sort descending (newest first)
+          ls -1 *.webp *.webm 2>/dev/null | sort -r | jq -R . | jq -s . > index.json
+
+          cd ..
+
+      - name: Commit changes
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
@@ -89,8 +100,8 @@ jobs:
           git add images-optimized
 
           if git diff --cached --quiet; then
-            echo "No optimized files changed"
+            echo "No changes"
           else
-            git commit -m "Update optimized media"
+            git commit -m "Update optimized media and index"
             git push
           fi
