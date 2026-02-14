@@ -17,10 +17,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install ImageMagick
-        run: sudo apt-get update && sudo apt-get install -y imagemagick
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick ffmpeg
 
-      - name: Compress images to WebP
+      - name: Optimize media (images + gifs)
         run: |
           mkdir -p images-optimized
 
@@ -29,24 +31,57 @@ jobs:
 
             filename=$(basename "$file")
             name="${filename%.*}"
+            ext="${filename##*.}"
+            ext_lower=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
 
-            case "$file" in
-              *.jpg|*.jpeg|*.png|*.JPG|*.JPEG|*.PNG)
-                echo "Processing $filename"
+            case "$ext_lower" in
+
+              # Static images → WebP
+              jpg|jpeg|png)
+                output="images-optimized/$name.webp"
+
+                if [ -f "$output" ] && [ "$file" -ot "$output" ]; then
+                  echo "Skipping $filename (up to date)"
+                  continue
+                fi
+
+                echo "Processing image $filename"
 
                 convert "$file[0]" \
                   -strip \
                   -resize 1600x1600\> \
                   -quality 80 \
-                  "images-optimized/$name.webp"
+                  "$output"
                 ;;
+
+              # GIF → looping WebM
+              gif)
+                output="images-optimized/$name.webm"
+
+                if [ -f "$output" ] && [ "$file" -ot "$output" ]; then
+                  echo "Skipping $filename (up to date)"
+                  continue
+                fi
+
+                echo "Converting GIF to WebM $filename"
+
+                ffmpeg -y -i "$file" \
+                  -vf "scale=1600:-2:flags=lanczos,fps=15" \
+                  -c:v libvpx-vp9 \
+                  -b:v 0 \
+                  -crf 35 \
+                  -an \
+                  -loop 0 \
+                  "$output"
+                ;;
+
               *)
-                echo "Skipping $filename"
+                echo "Skipping $filename (unsupported)"
                 ;;
             esac
           done
 
-      - name: Commit optimized images
+      - name: Commit optimized files
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
@@ -54,8 +89,8 @@ jobs:
           git add images-optimized
 
           if git diff --cached --quiet; then
-            echo "No changes"
+            echo "No optimized files changed"
           else
-            git commit -m "Auto-compress images"
+            git commit -m "Update optimized media"
             git push
           fi
