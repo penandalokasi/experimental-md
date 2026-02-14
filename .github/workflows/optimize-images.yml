@@ -1,13 +1,10 @@
-name: Optimize Media
+name: Optimize and Generate Thumbnails
 
 on:
   push:
     paths:
       - "images/**"
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   optimize:
@@ -17,153 +14,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick ffmpeg
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-      - name: Optimize media
-        run: |
-          mkdir -p images-optimized
+      - name: Install dependencies
+        run: npm install sharp glob
 
-          for file in images/*; do
-            [ -f "$file" ] || continue
+      - name: Optimize images and generate thumbnails
+        run: node .github/scripts/optimize-images.js
 
-            filename=$(basename "$file")
-            name="${filename%.*}"
-            ext="${filename##*.}"
-            ext_lower=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
-
-            case "$ext_lower" in
-
-              # Images → WebP (smart compression)
-              jpg|jpeg|png)
-                output="images-optimized/$name.webp"
-
-                if [ -f "$output" ] && [ "$file" -ot "$output" ]; then
-                  echo "Skipping $filename (WebP up to date)"
-                  continue
-                fi
-
-                echo "Processing image $filename"
-
-                # First pass
-                convert "$file[0]" \
-                  -strip \
-                  -resize 800x800\> \
-                  -colors 256 \
-                  -quality 75 \
-                  "$output"
-
-                filesize=$(stat -c%s "$output")
-
-                # If >100KB, recompress more aggressively
-                if [ "$filesize" -gt 100000 ]; then
-                  echo "Recompressing $filename (quality 65)"
-                  convert "$file[0]" \
-                    -strip \
-                    -resize 800x800\> \
-                    -colors 256 \
-                    -quality 65 \
-                    "$output"
-                fi
-
-                filesize=$(stat -c%s "$output")
-
-                if [ "$filesize" -gt 100000 ]; then
-                  echo "Recompressing $filename (quality 60)"
-                  convert "$file[0]" \
-                    -strip \
-                    -resize 800x800\> \
-                    -colors 256 \
-                    -quality 60 \
-                    "$output"
-                fi
-                ;;
-
-              # GIF → WebM (unchanged)
-              gif)
-                output="images-optimized/$name.webm"
-
-                if [ -f "$output" ] && [ "$file" -ot "$output" ]; then
-                  echo "Skipping $filename (WebM up to date)"
-                  continue
-                fi
-
-                echo "Processing GIF $filename"
-
-                ffmpeg -y -loglevel error -i "$file" \
-                  -vf "scale=896:-2:flags=lanczos,fps=15" \
-                  -c:v libvpx-vp9 \
-                  -b:v 0 \
-                  -crf 35 \
-                  -an \
-                  -loop 0 \
-                  "$output"
-                ;;
-
-              *)
-                echo "Skipping $filename (unsupported)"
-                ;;
-            esac
-          done
-
-
-      - name: Generate index.json
-        run: |
-          echo "Generating index.json"
-          output="images-optimized/index.json"
-          echo "[" > "$output"
-
-          first=true
-
-          for file in $(ls -1 images | sort -r); do
-            name="${file%.*}"
-            ext="${file##*.}"
-            ext_lower=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
-
-            case "$ext_lower" in
-              jpg|jpeg|png)
-                optimized="$name.webp"
-                ;;
-              gif)
-                optimized="$name.webm"
-                ;;
-              *)
-                continue
-                ;;
-            esac
-
-            # Skip if optimized file doesn't exist
-            if [ ! -f "images-optimized/$optimized" ]; then
-              continue
-            fi
-
-            if [ "$first" = true ]; then
-              first=false
-            else
-              echo "," >> "$output"
-            fi
-
-            echo "  {" >> "$output"
-            echo "    \"optimized\": \"$optimized\"," >> "$output"
-            echo "    \"original\": \"$file\"" >> "$output"
-            echo "  }" >> "$output"
-
-          done
-
-          echo "]" >> "$output"
-
-      - name: Commit changes
+      - name: Commit optimized results
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-
-          git add images-optimized
-
-          if git diff --cached --quiet; then
-            echo "No changes"
-          else
-            git commit -m "Update optimized media and index"
-            git push
-          fi
+          git add images-optimized images-thumbs index.json || true
+          git commit -m "Optimize images & generate thumbnails [skip ci]" || echo "No changes to commit"
+          git push
