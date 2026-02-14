@@ -11,32 +11,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 🧩 1. Checkout repository
+      # 1. Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ⚙️ 2. Install full FFmpeg with VP8/VP9 codec support
+      # 2. Install full FFmpeg
       - name: Install FFmpeg
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           ffmpeg -version
 
-      # 💾 3. Setup Node.js environment with caching
+      # 3. Set up Node.js (no caching)
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # 📦 4. Install dependencies
+      # 4. Install dependencies (Sharp + glob)
       - name: Install dependencies
-        run: npm ci || npm install
+        run: npm install sharp glob
 
-      # 🖼️ 5. Optimize images and generate thumbnails
+      # 5. Run your optimization script
       - name: Run image optimization script
         run: node .github/scripts/optimize-images.js
 
-      # 💾 6. Commit optimized results back to repo
+      # 6. Commit optimized outputs
       - name: Commit optimized results
         run: |
           git config user.name "github-actions"
