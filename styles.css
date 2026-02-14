@@ -19,21 +19,21 @@ header {
 /* ===== Desktop (default) ===== */
 .gallery {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(8, 1fr);
     gap: 10px;
 }
 
 /* Large tablet / small laptop */
 @media (max-width: 1400px) {
     .gallery {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(6, 1fr);
     }
 }
 
 /* Tablet */
 @media (max-width: 900px) {
     .gallery {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
     }
 }
 
