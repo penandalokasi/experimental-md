@@ -55,34 +55,3 @@ function createItem(item, index) {
         media = document.createElement("video");
         media.muted = true;
         media.loop = true;
-        media.playsInline = true;
-        media.autoplay = true;
-    } else {
-        media = document.createElement("img");
-        media.draggable = false;
-    }
-
-    media.dataset.src = `${config.displayFolder}/${item.optimized}`;
-    media.alt = item.optimized;
-    observer.observe(media);
-    media.onclick = () => openLightbox(index);
-
-    const btn = document.createElement("button");
-    btn.textContent = "Copy URL";
-    btn.onclick = e => { e.stopPropagation(); copyUrl(item, btn); };
-
-    container.appendChild(media);
-    container.appendChild(btn);
-    gallery.appendChild(container);
-}
-
-/* ===== Copy URL ===== */
-function copyUrl(item, button) {
-    const url = `https://raw.githubusercontent.com/${config.user}/${config.repo}/${config.branch}/${config.originalFolder}/${item.original}`;
-    navigator.clipboard.writeText(url).then(() => {
-        if (button) {
-            const txt = button.textContent;
-            button.textContent = "Copied";
-            setTimeout(()=> button.textContent = txt, 1200);
-        }
-    });
