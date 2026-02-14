@@ -3,8 +3,9 @@ const config = {
     user: "penandalokasi",
     repo: "experimental-md",
     branch: "main",
-    displayFolder: "images-optimized",
-    originalFolder: "images"
+
+    displayFolder: "images-optimized", // compressed images (shown in gallery)
+    originalFolder: "images"            // original images (used for copy URL)
 };
 
 const gallery = document.getElementById("gallery");
@@ -13,39 +14,42 @@ const lightboxImg = document.getElementById("lightboxImg");
 const closeBtn = document.getElementById("closeBtn");
 const lightboxCopy = document.getElementById("lightboxCopy");
 
-let imageList = [];          // optimized filenames
-let originalMap = {};        // baseName -> original filename
+let imageList = [];
+let originalMap = {}; // baseName -> original filename
+let currentIndex = 0;
 
+/* ===== GitHub API URLs ===== */
+const optimizedApiUrl = `https://api.github.com/repos/${config.user}/${config.repo}/contents/${config.displayFolder}?ref=${config.branch}`;
+const originalApiUrl  = `https://api.github.com/repos/${config.user}/${config.repo}/contents/${config.originalFolder}?ref=${config.branch}`;
 
-/* ===== GitHub API ===== */
-async function loadImages() {
-    const optimizedUrl = `https://api.github.com/repos/${config.user}/${config.repo}/contents/${config.displayFolder}?ref=${config.branch}`;
-    const originalUrl = `https://api.github.com/repos/${config.user}/${config.repo}/contents/${config.originalFolder}?ref=${config.branch}`;
+/* ===== Load both folders ===== */
+Promise.all([
+    fetch(optimizedApiUrl).then(res => res.json()),
+    fetch(originalApiUrl).then(res => res.json())
+])
+.then(([optimizedFiles, originalFiles]) => {
 
-    const [optRes, origRes] = await Promise.all([
-        fetch(optimizedUrl),
-        fetch(originalUrl)
-    ]);
-
-    const optimizedData = await optRes.json();
-    const originalData = await origRes.json();
-
-    // Build original map
-    originalMap = {};
-    originalData.forEach(file => {
-        if (file.type !== "file") return;
-        const base = file.name.replace(/\.[^/.]+$/, "");
-        originalMap[base] = file.name;
-    });
-
-    // Optimized list
-    imageList = optimizedData
+    /* Build original filename map */
+    originalFiles
         .filter(file => file.type === "file")
-        .map(file => file.name)
-        .sort((a, b) => b.localeCompare(a));
+        .forEach(file => {
+            const base = file.name.replace(/\.[^/.]+$/, "");
+            originalMap[base] = file.name;
+        });
 
-    renderGallery();
-}
+    /* Optimized list for gallery */
+    imageList = optimizedFiles
+        .filter(file => file.type === "file")
+        .filter(file => file.name.match(/\.(jpg|jpeg|png|gif|webp|bmp|webm)$/i))
+        .sort((a, b) => b.name.localeCompare(a.name))
+        .map(file => file.name);
+
+    imageList.forEach((name, index) => createItem(name, index));
+})
+.catch(err => {
+    gallery.innerHTML = "Failed to load images.";
+    console.error(err);
+});
 
 /* ===== Lazy loading observer ===== */
 const observer = new IntersectionObserver((entries, obs) => {
@@ -66,7 +70,7 @@ function createItem(filename, index) {
     container.className = "item";
 
     const img = document.createElement("img");
-    img.dataset.src = `${config.folder}/${filename}`;
+    img.dataset.src = `${config.displayFolder}/${filename}`;
     img.draggable = false;
     img.alt = filename;
 
@@ -87,8 +91,8 @@ function createItem(filename, index) {
     gallery.appendChild(container);
 }
 
-/* ===== URL helper ===== */
-function getOriginalUrl(optimizedFilename) {
+/* ===== URL helper (original file, no guessing) ===== */
+function getRawUrl(optimizedFilename) {
     const base = optimizedFilename.replace(/\.[^/.]+$/, "");
     const originalName = originalMap[base];
 
@@ -100,12 +104,18 @@ function getOriginalUrl(optimizedFilename) {
     return `https://raw.githubusercontent.com/${config.user}/${config.repo}/${config.branch}/${config.originalFolder}/${originalName}`;
 }
 
-function copyImageUrl(filename) {
-    const url = getOriginalUrl(filename);
+function copyUrl(filename, button) {
+    const url = getRawUrl(filename);
     if (!url) return;
-    navigator.clipboard.writeText(url);
-}
 
+    navigator.clipboard.writeText(url).then(() => {
+        if (button) {
+            const original = button.textContent;
+            button.textContent = "Copied";
+            setTimeout(() => button.textContent = original, 1200);
+        }
+    });
+}
 
 /* ===== Lightbox ===== */
 function openLightbox(index) {
@@ -123,7 +133,7 @@ function closeLightbox() {
 function showImage(index) {
     if (index < 0 || index >= imageList.length) return;
     currentIndex = index;
-    lightboxImg.src = `${config.folder}/${imageList[index]}`;
+    lightboxImg.src = `${config.displayFolder}/${imageList[index]}`;
 }
 
 closeBtn.onclick = closeLightbox;
@@ -132,7 +142,7 @@ lightbox.onclick = (e) => {
     if (e.target === lightbox) closeLightbox();
 };
 
-/* Lightbox copy button (fixed) */
+/* Lightbox copy button */
 lightboxCopy.onclick = () => {
     const filename = imageList[currentIndex];
     copyUrl(filename, lightboxCopy);
