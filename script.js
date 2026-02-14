@@ -118,7 +118,8 @@ function openLightbox(index){
     borderRadius:"3px",
     padding:"5px 10px",
     cursor:"pointer",
-    outline: "none"   // prevent blue focus box
+    outline: "none",                     // remove focus outline
+    WebkitTapHighlightColor: "transparent" // remove blue tap highlight on mobile
   });
   xBtn.onclick = closeLightbox;
   lightbox.appendChild(xBtn);
@@ -196,7 +197,8 @@ function addSideNav(){
       cursor:"pointer",
       zIndex:"10",
       background:"rgba(0,0,0,0)",
-      outline: "none"   // remove blue focus box
+      outline: "none",                     // remove focus outline
+      WebkitTapHighlightColor: "transparent" // remove blue tap highlight on mobile
     });
     lightbox.appendChild(el);
   });
