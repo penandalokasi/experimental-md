@@ -10,7 +10,6 @@ const config = {
 /* ===== Elements ===== */
 const gallery = document.getElementById("gallery");
 const lightbox = document.getElementById("lightbox");
-const closeBtn = document.getElementById("closeBtn");
 const lightboxCopy = document.getElementById("lightboxCopy");
 
 let imageList = [];
@@ -92,7 +91,8 @@ function createLightboxEl(item){
     transform:"translate(-50%,-50%)",
     maxWidth:"90vw",
     maxHeight:"90vh",
-    transition:"transform 0.3s ease,left 0.3s ease"
+    opacity:"0",
+    transition:"transform 0.3s ease,left 0.3s ease,opacity 0.3s ease"
   });
   return el;
 }
@@ -104,9 +104,15 @@ function openLightbox(index){
   lightbox.appendChild(currentEl);
   lightbox.classList.remove("hidden");
   document.body.classList.add("no-scroll");
+
+  // Fade in
+  requestAnimationFrame(()=>currentEl.style.opacity="1");
+
   addSideNav();
+  addCloseButton();
 }
 
+/* ===== Close Lightbox ===== */
 function closeLightbox(){
   lightbox.classList.add("hidden");
   document.body.classList.remove("no-scroll");
@@ -127,8 +133,10 @@ function navigate(direction){
   lightbox.appendChild(nextEl);
 
   requestAnimationFrame(()=>{
-    currentEl.style.left=direction==="next"? "-150%":"150%";
-    nextEl.style.left="50%";
+    currentEl.style.left = direction==="next"?"-150%":"150%";
+    currentEl.style.opacity="0.5";
+    nextEl.style.left = "50%";
+    nextEl.style.opacity="1";
   });
 
   isAnimating=true;
@@ -152,15 +160,28 @@ document.addEventListener("keydown",e=>{
 
 let touchStartX=0,touchStartY=0;
 const swipeThreshold=50;
+
 lightbox.addEventListener("touchstart",e=>{
-  if(e.touches.length===1){touchStartX=e.touches[0].clientX; touchStartY=e.touches[0].clientY;}
+  if(e.touches.length===1){
+    touchStartX=e.touches[0].clientX;
+    touchStartY=e.touches[0].clientY;
+  }
 },{passive:true});
+
+lightbox.addEventListener("touchmove",e=>{
+  // Prevent scrolling during swipe
+  e.preventDefault();
+},{passive:false});
+
 lightbox.addEventListener("touchend",e=>{
   const deltaX=e.changedTouches[0].clientX-touchStartX;
   const deltaY=e.changedTouches[0].clientY-touchStartY;
-  if(Math.abs(deltaY)>Math.abs(deltaX) && Math.abs(deltaY)>swipeThreshold && deltaY>0) closeLightbox();
-  else if(Math.abs(deltaX)>swipeThreshold) deltaX<0?navigate("next"):navigate("prev");
-},{passive:true});
+  if(Math.abs(deltaY)>Math.abs(deltaX) && Math.abs(deltaY)>swipeThreshold && deltaY>0){
+    closeLightbox();
+  } else if(Math.abs(deltaX)>swipeThreshold){
+    deltaX<0?navigate("next"):navigate("prev");
+  }
+});
 
 /* ===== Side Clickable Nav ===== */
 function addSideNav(){
@@ -177,9 +198,23 @@ function addSideNav(){
   right.onclick=()=>navigate("next");
 }
 
+/* ===== Close Button (X) ===== */
+function addCloseButton(){
+  const btn=document.createElement("div");
+  btn.textContent="×";
+  Object.assign(btn.style,{
+    position:"absolute",
+    top:"10px",
+    right:"10px",
+    fontSize:"30px",
+    color:"#fff",
+    cursor:"pointer",
+    zIndex:"20",
+    userSelect:"none"
+  });
+  btn.onclick=closeLightbox;
+  lightbox.appendChild(btn);
+}
+
 /* ===== Copy Button ===== */
 lightboxCopy.onclick=()=>copyUrl(imageList[currentIndex],lightboxCopy);
-
-/* ===== Close Button ===== */
-closeBtn.onclick=closeLightbox;
-lightbox.onclick=e=>{if(e.target===lightbox) closeLightbox();}
