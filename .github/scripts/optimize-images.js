@@ -2,7 +2,7 @@
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
-import glob from "glob";
+import { glob } from "glob";  // ✅ fixed import
 
 const srcDir = "images";
 const outDir = "images-optimized";
@@ -12,7 +12,7 @@ const indexFile = "index.json";
 fs.mkdirSync(outDir, { recursive: true });
 fs.mkdirSync(thumbDir, { recursive: true });
 
-const files = glob.sync(`${srcDir}/**/*.{jpg,jpeg,png,webp}`, { nodir: true });
+const files = await glob(`${srcDir}/**/*.{jpg,jpeg,png,webp}`);
 
 if (!files.length) {
   console.log("❌ No images found in /images folder.");
@@ -33,7 +33,7 @@ for (const file of files) {
   const thumbAVIF = path.join(thumbDir, `${base}.avif`);
 
   try {
-    // ---- Full Optimized ----
+    // Full optimized versions
     await sharp(file)
       .resize({ width: 1920, withoutEnlargement: true })
       .webp({ quality: 80 })
@@ -44,7 +44,7 @@ for (const file of files) {
       .avif({ quality: 60 })
       .toFile(optimizedAVIF);
 
-    // ---- Thumbnails (square) ----
+    // Square thumbnails
     await sharp(file)
       .resize({ width: 480, height: 480, fit: "cover", position: "centre" })
       .webp({ quality: 60 })
