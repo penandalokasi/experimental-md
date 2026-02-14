@@ -36,7 +36,7 @@ jobs:
 
             case "$ext_lower" in
 
-              # Images → WebP
+              # Images → WebP (smart compression)
               jpg|jpeg|png)
                 output="images-optimized/$name.webp"
 
@@ -47,14 +47,41 @@ jobs:
 
                 echo "Processing image $filename"
 
+                # First pass
                 convert "$file[0]" \
                   -strip \
                   -resize 1600x1600\> \
-                  -quality 80 \
+                  -colors 256 \
+                  -quality 75 \
                   "$output"
+
+                filesize=$(stat -c%s "$output")
+
+                # If >100KB, recompress more aggressively
+                if [ "$filesize" -gt 100000 ]; then
+                  echo "Recompressing $filename (quality 65)"
+                  convert "$file[0]" \
+                    -strip \
+                    -resize 1600x1600\> \
+                    -colors 256 \
+                    -quality 65 \
+                    "$output"
+                fi
+
+                filesize=$(stat -c%s "$output")
+
+                if [ "$filesize" -gt 100000 ]; then
+                  echo "Recompressing $filename (quality 60)"
+                  convert "$file[0]" \
+                    -strip \
+                    -resize 1600x1600\> \
+                    -colors 256 \
+                    -quality 60 \
+                    "$output"
+                fi
                 ;;
 
-              # GIF → WebM
+              # GIF → WebM (unchanged)
               gif)
                 output="images-optimized/$name.webm"
 
@@ -80,6 +107,7 @@ jobs:
                 ;;
             esac
           done
+
 
       - name: Generate index.json
         run: |
