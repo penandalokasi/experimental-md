@@ -25,36 +25,41 @@ fetch("index.json")
   .then(r => r.ok ? r.json() : Promise.reject("index.json not found"))
   .then(files => {
     if (!Array.isArray(files)) throw "index.json format error";
-    imageList = files.sort((a, b) => b.optimized.localeCompare(a.optimized));
+    imageList = files.sort((a, b) => b.original.localeCompare(a.original));
     if (!imageList.length) throw "No images in index.json";
     imageList.forEach((item, i) => createThumbnail(item, i));
   })
   .catch(err => gallery.innerHTML = err);
 
-/* ===== Create Thumbnails ===== */
+/* ===== Create Thumbnails (with <picture>) ===== */
 function createThumbnail(item, index) {
   const container = document.createElement("div");
   container.className = "item";
 
+  const picture = document.createElement("picture");
+
+  const srcAvif = item.thumbnail?.avif || `${config.thumbFolder}/${item.original}.avif`;
+  const srcWebp = item.thumbnail?.webp || `${config.thumbFolder}/${item.original}.webp`;
+
+  const sourceAvif = document.createElement("source");
+  sourceAvif.type = "image/avif";
+  sourceAvif.srcset = srcAvif;
+
+  const sourceWebp = document.createElement("source");
+  sourceWebp.type = "image/webp";
+  sourceWebp.srcset = srcWebp;
+
   const img = document.createElement("img");
+  img.src = srcWebp;
+  img.alt = item.original;
   img.draggable = false;
-  img.alt = item.optimized;
-
-  // Thumbnail source (square)
-  const thumbSrc = item.thumbnail
-    ? item.thumbnail
-    : `${config.thumbFolder}/${item.optimized}`;
-  img.src = thumbSrc;
-
-  // Store full image path
-  img.dataset.fullSrc = item.optimized
-    ? item.optimized
-    : `${config.displayFolder}/${item.optimized}`;
-
+  img.dataset.index = index;
   img.onclick = () => openLightbox(index);
-  container.appendChild(img);
 
-  // Copy URL button
+  picture.append(sourceAvif, sourceWebp, img);
+  container.appendChild(picture);
+
+  // Copy button
   const btn = document.createElement("button");
   btn.textContent = "Copy URL";
   btn.onclick = e => {
@@ -78,14 +83,25 @@ function copyUrl(item, btn) {
   });
 }
 
-/* ===== Lightbox ===== */
+/* ===== Lightbox (with <picture>) ===== */
 function createLightboxEl(item) {
-  const src = item.optimized
-    ? item.optimized
-    : `${config.displayFolder}/${item.optimized}`;
-  const el = document.createElement("img");
-  el.src = src;
-  Object.assign(el.style, {
+  const picture = document.createElement("picture");
+
+  const srcAvif = item.optimized?.avif || `${config.displayFolder}/${item.original}.avif`;
+  const srcWebp = item.optimized?.webp || `${config.displayFolder}/${item.original}.webp`;
+
+  const sourceAvif = document.createElement("source");
+  sourceAvif.type = "image/avif";
+  sourceAvif.srcset = srcAvif;
+
+  const sourceWebp = document.createElement("source");
+  sourceWebp.type = "image/webp";
+  sourceWebp.srcset = srcWebp;
+
+  const img = document.createElement("img");
+  img.src = srcWebp;
+  img.alt = item.original;
+  Object.assign(img.style, {
     position: "absolute",
     top: "50%",
     left: "50%",
@@ -94,7 +110,9 @@ function createLightboxEl(item) {
     maxHeight: "90vh",
     transition: "transform 0.3s ease,left 0.3s ease"
   });
-  return el;
+
+  picture.append(sourceAvif, sourceWebp, img);
+  return picture;
 }
 
 function openLightbox(index) {
@@ -103,7 +121,7 @@ function openLightbox(index) {
   lightbox.innerHTML = "";
   lightbox.appendChild(currentEl);
 
-  // Add Close (X) button
+  // Close (X) button
   const xBtn = document.createElement("button");
   xBtn.textContent = "✕";
   Object.assign(xBtn.style, {
@@ -122,7 +140,7 @@ function openLightbox(index) {
   xBtn.onclick = closeLightbox;
   lightbox.appendChild(xBtn);
 
-  // Add Copy URL button
+  // Copy button
   const copyBtn = document.createElement("button");
   copyBtn.textContent = "Copy URL";
   Object.assign(copyBtn.style, {
