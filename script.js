@@ -3,7 +3,8 @@ const config = {
     user: "penandalokasi",
     repo: "experimental-md",
     branch: "main",
-    folder: "images"
+    displayFolder: "images-optimized",
+    originalFolder: "images"
 };
 
 const gallery = document.getElementById("gallery");
@@ -12,27 +13,39 @@ const lightboxImg = document.getElementById("lightboxImg");
 const closeBtn = document.getElementById("closeBtn");
 const lightboxCopy = document.getElementById("lightboxCopy");
 
-let imageList = [];
-let currentIndex = 0;
+let imageList = [];          // optimized filenames
+let originalMap = {};        // baseName -> original filename
+
 
 /* ===== GitHub API ===== */
-const apiUrl = `https://api.github.com/repos/${config.user}/${config.repo}/contents/${config.folder}?ref=${config.branch}`;
+async function loadImages() {
+    const optimizedUrl = `https://api.github.com/repos/${config.user}/${config.repo}/contents/${config.displayFolder}?ref=${config.branch}`;
+    const originalUrl = `https://api.github.com/repos/${config.user}/${config.repo}/contents/${config.originalFolder}?ref=${config.branch}`;
 
-fetch(apiUrl)
-    .then(res => res.json())
-    .then(files => {
-        imageList = files
-            .filter(file => file.type === "file")
-            .filter(file => file.name.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i))
-            .sort((a, b) => b.name.localeCompare(a.name))
-            .map(file => file.name);
+    const [optRes, origRes] = await Promise.all([
+        fetch(optimizedUrl),
+        fetch(originalUrl)
+    ]);
 
-        imageList.forEach((name, index) => createItem(name, index));
-    })
-    .catch(err => {
-        gallery.innerHTML = "Failed to load images.";
-        console.error(err);
+    const optimizedData = await optRes.json();
+    const originalData = await origRes.json();
+
+    // Build original map
+    originalMap = {};
+    originalData.forEach(file => {
+        if (file.type !== "file") return;
+        const base = file.name.replace(/\.[^/.]+$/, "");
+        originalMap[base] = file.name;
     });
+
+    // Optimized list
+    imageList = optimizedData
+        .filter(file => file.type === "file")
+        .map(file => file.name)
+        .sort((a, b) => b.localeCompare(a));
+
+    renderGallery();
+}
 
 /* ===== Lazy loading observer ===== */
 const observer = new IntersectionObserver((entries, obs) => {
@@ -75,20 +88,24 @@ function createItem(filename, index) {
 }
 
 /* ===== URL helper ===== */
-function getRawUrl(filename) {
-    return `https://raw.githubusercontent.com/${config.user}/${config.repo}/${config.branch}/${config.folder}/${filename}`;
+function getOriginalUrl(optimizedFilename) {
+    const base = optimizedFilename.replace(/\.[^/.]+$/, "");
+    const originalName = originalMap[base];
+
+    if (!originalName) {
+        console.warn("Original not found for:", optimizedFilename);
+        return "";
+    }
+
+    return `https://raw.githubusercontent.com/${config.user}/${config.repo}/${config.branch}/${config.originalFolder}/${originalName}`;
 }
 
-function copyUrl(filename, button) {
-    const url = getRawUrl(filename);
-    navigator.clipboard.writeText(url).then(() => {
-        if (button) {
-            const original = button.textContent;
-            button.textContent = "Copied";
-            setTimeout(() => button.textContent = original, 1200);
-        }
-    });
+function copyImageUrl(filename) {
+    const url = getOriginalUrl(filename);
+    if (!url) return;
+    navigator.clipboard.writeText(url);
 }
+
 
 /* ===== Lightbox ===== */
 function openLightbox(index) {
