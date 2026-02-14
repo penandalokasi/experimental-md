@@ -177,9 +177,27 @@ function addSideNav(){
   right.onclick=()=>navigate("next");
 }
 
-/* ===== Copy Button ===== */
-lightboxCopy.onclick=()=>copyUrl(imageList[currentIndex],lightboxCopy);
-
 /* ===== Close Button ===== */
 closeBtn.onclick=closeLightbox;
 lightbox.onclick=e=>{if(e.target===lightbox) closeLightbox();}
+
+/* ===== Extra Close Button Inside Lightbox ===== */
+function addCloseButton(){
+  const btn=document.createElement("button");
+  btn.textContent="✕";
+  Object.assign(btn.style,{
+    position:"absolute",
+    top:"10px",
+    right:"10px",
+    zIndex:"20",
+    fontSize:"24px",
+    background:"rgba(0,0,0,0.5)",
+    color:"#fff",
+    border:"none",
+    borderRadius:"4px",
+    padding:"4px 8px",
+    cursor:"pointer"
+  });
+  btn.onclick=closeLightbox;
+  lightbox.appendChild(btn);
+}
