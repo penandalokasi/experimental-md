@@ -3,9 +3,8 @@ const config = {
     user: "penandalokasi",
     repo: "experimental-md",
     branch: "main",
-
-    displayFolder: "images-optimized", // compressed images (shown in gallery)
-    originalFolder: "images"            // original images (used for copy URL)
+    displayFolder: "images-optimized", // shown in gallery
+    originalFolder: "images"            // used for copy URL
 };
 
 const gallery = document.getElementById("gallery");
@@ -15,54 +14,64 @@ const closeBtn = document.getElementById("closeBtn");
 const lightboxCopy = document.getElementById("lightboxCopy");
 
 let imageList = [];
-let originalMap = {}; // baseName -> original filename
+let originalMap = {};
 let currentIndex = 0;
 
-/* ===== GitHub API URLs ===== */
+/* ===== API URLs ===== */
 const optimizedApiUrl = `https://api.github.com/repos/${config.user}/${config.repo}/contents/${config.displayFolder}?ref=${config.branch}`;
-const originalApiUrl  = `https://api.github.com/repos/${config.user}/${config.repo}/contents/${config.originalFolder}?ref=${config.branch}`;
+const originalApiUrl = `https://api.github.com/repos/${config.user}/${config.repo}/contents/${config.originalFolder}?ref=${config.branch}`;
 
-/* ===== Load both folders ===== */
-Promise.all([
-    fetch(optimizedApiUrl).then(res => res.json()),
-    fetch(originalApiUrl).then(res => res.json())
-])
-.then(([optimizedFiles, originalFiles]) => {
+/* ===== Load images ===== */
+async function loadImages() {
+    try {
+        const optimizedRes = await fetch(optimizedApiUrl);
+        const originalRes = await fetch(originalApiUrl);
 
-    /* Build original filename map */
-    originalFiles
-        .filter(file => file.type === "file")
-        .forEach(file => {
-            const base = file.name.replace(/\.[^/.]+$/, "");
-            originalMap[base] = file.name;
-        });
+        if (!optimizedRes.ok) throw new Error("Optimized folder not found");
+        if (!originalRes.ok) throw new Error("Original folder not found");
 
-    /* Optimized list for gallery */
-    imageList = optimizedFiles
-        .filter(file => file.type === "file")
-        .filter(file => file.name.match(/\.(jpg|jpeg|png|gif|webp|bmp|webm)$/i))
-        .sort((a, b) => b.name.localeCompare(a.name))
-        .map(file => file.name);
+        const optimizedFiles = await optimizedRes.json();
+        const originalFiles = await originalRes.json();
 
-    imageList.forEach((name, index) => createItem(name, index));
-})
-.catch(err => {
-    gallery.innerHTML = "Failed to load images.";
-    console.error(err);
-});
+        /* Build original filename map */
+        originalFiles
+            .filter(file => file.type === "file")
+            .forEach(file => {
+                const base = file.name.replace(/\.[^/.]+$/, "");
+                originalMap[base] = file.name;
+            });
 
-/* ===== Lazy loading observer ===== */
+        /* Optimized list */
+        imageList = optimizedFiles
+            .filter(file => file.type === "file")
+            .filter(file => file.name.match(/\.(jpg|jpeg|png|gif|webp|bmp|webm)$/i))
+            .sort((a, b) => b.name.localeCompare(a.name))
+            .map(file => file.name);
+
+        if (imageList.length === 0) {
+            gallery.innerHTML = "No images found in images-optimized.";
+            return;
+        }
+
+        imageList.forEach((name, index) => createItem(name, index));
+
+    } catch (err) {
+        console.error(err);
+        gallery.innerHTML = "Failed to load images. Check folder names and repository.";
+    }
+}
+
+loadImages();
+
+/* ===== Lazy loading ===== */
 const observer = new IntersectionObserver((entries, obs) => {
     entries.forEach(entry => {
         if (!entry.isIntersecting) return;
-
         const img = entry.target;
         img.src = img.dataset.src;
         obs.unobserve(img);
     });
-}, {
-    rootMargin: "200px"
-});
+}, { rootMargin: "200px" });
 
 /* ===== Create thumbnails ===== */
 function createItem(filename, index) {
@@ -75,125 +84,14 @@ function createItem(filename, index) {
     img.alt = filename;
 
     observer.observe(img);
-
     img.onclick = () => openLightbox(index);
 
     const btn = document.createElement("button");
     btn.textContent = "Copy URL";
-
     btn.onclick = (e) => {
         e.stopPropagation();
         copyUrl(filename, btn);
     };
 
     container.appendChild(img);
-    container.appendChild(btn);
-    gallery.appendChild(container);
-}
-
-/* ===== URL helper (original file, no guessing) ===== */
-function getRawUrl(optimizedFilename) {
-    const base = optimizedFilename.replace(/\.[^/.]+$/, "");
-    const originalName = originalMap[base];
-
-    if (!originalName) {
-        console.warn("Original not found for:", optimizedFilename);
-        return "";
-    }
-
-    return `https://raw.githubusercontent.com/${config.user}/${config.repo}/${config.branch}/${config.originalFolder}/${originalName}`;
-}
-
-function copyUrl(filename, button) {
-    const url = getRawUrl(filename);
-    if (!url) return;
-
-    navigator.clipboard.writeText(url).then(() => {
-        if (button) {
-            const original = button.textContent;
-            button.textContent = "Copied";
-            setTimeout(() => button.textContent = original, 1200);
-        }
-    });
-}
-
-/* ===== Lightbox ===== */
-function openLightbox(index) {
-    currentIndex = index;
-    showImage(index);
-    lightbox.classList.remove("hidden");
-    document.body.classList.add("no-scroll");
-}
-
-function closeLightbox() {
-    lightbox.classList.add("hidden");
-    document.body.classList.remove("no-scroll");
-}
-
-function showImage(index) {
-    if (index < 0 || index >= imageList.length) return;
-    currentIndex = index;
-    lightboxImg.src = `${config.displayFolder}/${imageList[index]}`;
-}
-
-closeBtn.onclick = closeLightbox;
-
-lightbox.onclick = (e) => {
-    if (e.target === lightbox) closeLightbox();
-};
-
-/* Lightbox copy button */
-lightboxCopy.onclick = () => {
-    const filename = imageList[currentIndex];
-    copyUrl(filename, lightboxCopy);
-};
-
-/* ===== Keyboard navigation ===== */
-document.addEventListener("keydown", (e) => {
-    if (lightbox.classList.contains("hidden")) return;
-
-    if (e.key === "Escape") closeLightbox();
-    if (e.key === "ArrowRight") nextImage();
-    if (e.key === "ArrowLeft") prevImage();
-});
-
-/* ===== Navigation ===== */
-function nextImage() {
-    if (currentIndex < imageList.length - 1) {
-        showImage(currentIndex + 1);
-    }
-}
-
-function prevImage() {
-    if (currentIndex > 0) {
-        showImage(currentIndex - 1);
-    }
-}
-
-/* ===== Touch gestures ===== */
-let startX = 0;
-let startY = 0;
-
-lightbox.addEventListener("touchstart", (e) => {
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-}, { passive: false });
-
-lightbox.addEventListener("touchmove", (e) => {
-    e.preventDefault(); // prevents background scroll
-}, { passive: false });
-
-lightbox.addEventListener("touchend", (e) => {
-    const endX = e.changedTouches[0].clientX;
-    const endY = e.changedTouches[0].clientY;
-
-    const dx = endX - startX;
-    const dy = endY - startY;
-
-    if (Math.abs(dx) > Math.abs(dy)) {
-        if (dx > 50) prevImage();
-        if (dx < -50) nextImage();
-    } else {
-        if (dy > 80) closeLightbox();
-    }
-});
+    container.append
