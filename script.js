@@ -1,57 +1,185 @@
 /* ===== Config ===== */
 const config = {
-    user: "penandalokasi",
-    repo: "experimental-md",
-    branch: "main",
-    displayFolder: "images-optimized",
-    originalFolder: "images"
+  user: "penandalokasi",
+  repo: "experimental-md",
+  branch: "main",
+  displayFolder: "images-optimized",
+  originalFolder: "images"
 };
 
 /* ===== Elements ===== */
 const gallery = document.getElementById("gallery");
 const lightbox = document.getElementById("lightbox");
-const lightboxImg = document.getElementById("lightboxImg");
 const closeBtn = document.getElementById("closeBtn");
 const lightboxCopy = document.getElementById("lightboxCopy");
 
 let imageList = [];
 let currentIndex = 0;
-let isAnimating = false;
 let currentEl = null;
 let nextEl = null;
+let isAnimating = false;
 
-/* ===== Load index.json ===== */
+/* ===== Load Images ===== */
 fetch(`${config.displayFolder}/index.json`)
-    .then(res => res.ok ? res.json() : Promise.reject("index.json not found"))
-    .then(files => {
-        if (!Array.isArray(files)) throw "index.json format error";
-        imageList = files.sort((a, b) => b.optimized.localeCompare(a.optimized));
-        if (!imageList.length) throw "No images in index.json";
-        imageList.forEach((item, idx) => createItem(item, idx));
-    })
-    .catch(err => { 
-        console.error(err);
-        gallery.innerHTML = err; 
+  .then(r => r.ok ? r.json() : Promise.reject("index.json not found"))
+  .then(files => {
+    if (!Array.isArray(files)) throw "index.json format error";
+    imageList = files.sort((a,b)=>b.optimized.localeCompare(a.optimized));
+    if (!imageList.length) throw "No images in index.json";
+    imageList.forEach((item, i)=> createThumbnail(item,i));
+  })
+  .catch(err => gallery.innerHTML = err);
+
+/* ===== Create Thumbnails ===== */
+function createThumbnail(item,index){
+  const container = document.createElement("div");
+  container.className="item";
+
+  const media = item.optimized.match(/\.webm$/i) 
+    ? Object.assign(document.createElement("video"), {muted:true, loop:true, playsInline:true, autoplay:true}) 
+    : Object.assign(document.createElement("img"), {draggable:false});
+
+  media.dataset.src=`${config.displayFolder}/${item.optimized}`;
+  media.alt=item.optimized;
+  media.onclick=()=>openLightbox(index);
+  container.appendChild(media);
+
+  const btn=document.createElement("button");
+  btn.textContent="Copy URL";
+  btn.onclick=e=>{
+    e.stopPropagation();
+    copyUrl(item,btn);
+  };
+  container.appendChild(btn);
+
+  gallery.appendChild(container);
+
+  // Lazy load
+  const observer = new IntersectionObserver((entries,obs)=>{
+    entries.forEach(entry=>{
+      if(entry.isIntersecting){
+        entry.target.src = entry.target.dataset.src;
+        if(entry.target.tagName==="VIDEO") entry.target.play().catch(()=>{});
+        obs.unobserve(entry.target);
+      }
     });
+  },{rootMargin:"200px"});
+  observer.observe(media);
+}
 
-/* ===== Lazy loading ===== */
-const observer = new IntersectionObserver((entries, obs) => {
-    entries.forEach(entry => {
-        if (!entry.isIntersecting) return;
-        const el = entry.target;
-        el.src = el.dataset.src;
-        if (el.tagName === "VIDEO") el.play().catch(()=>{});
-        obs.unobserve(el);
+/* ===== Copy URL ===== */
+function copyUrl(item,btn){
+  const url=`https://raw.githubusercontent.com/${config.user}/${config.repo}/${config.branch}/${config.originalFolder}/${item.original}`;
+  navigator.clipboard.writeText(url).then(()=>{
+    if(btn){
+      const txt=btn.textContent;
+      btn.textContent="Copied";
+      setTimeout(()=>btn.textContent=txt,1200);
+    }
+  });
+}
+
+/* ===== Lightbox ===== */
+function createLightboxEl(item){
+  const src=`${config.displayFolder}/${item.optimized}`;
+  const el=item.optimized.match(/\.webm$/i)?document.createElement("video"):document.createElement("img");
+  if(el.tagName==="VIDEO"){el.src=src;el.controls=true;el.autoplay=true;el.loop=true;}
+  else el.src=src;
+  Object.assign(el.style,{
+    position:"absolute",
+    top:"50%",
+    left:"50%",
+    transform:"translate(-50%,-50%)",
+    maxWidth:"90vw",
+    maxHeight:"90vh",
+    transition:"transform 0.3s ease,left 0.3s ease"
+  });
+  return el;
+}
+
+function openLightbox(index){
+  currentIndex=index;
+  currentEl=createLightboxEl(imageList[currentIndex]);
+  lightbox.innerHTML="";
+  lightbox.appendChild(currentEl);
+  lightbox.classList.remove("hidden");
+  document.body.classList.add("no-scroll");
+  addSideNav();
+}
+
+function closeLightbox(){
+  lightbox.classList.add("hidden");
+  document.body.classList.remove("no-scroll");
+  if(currentEl?.tagName==="VIDEO") currentEl.pause();
+  lightbox.innerHTML="";
+  currentEl=nextEl=null;
+}
+
+/* ===== Navigate ===== */
+function navigate(direction){
+  if(isAnimating) return;
+  if(direction==="next" && currentIndex>=imageList.length-1) return;
+  if(direction==="prev" && currentIndex<=0) return;
+
+  const nextIndex=direction==="next"?currentIndex+1:currentIndex-1;
+  nextEl=createLightboxEl(imageList[nextIndex]);
+  nextEl.style.left = direction==="next"?"150%":"-150%";
+  lightbox.appendChild(nextEl);
+
+  requestAnimationFrame(()=>{
+    currentEl.style.left=direction==="next"? "-150%":"150%";
+    nextEl.style.left="50%";
+  });
+
+  isAnimating=true;
+  setTimeout(()=>{
+    if(currentEl?.tagName==="VIDEO") currentEl.pause();
+    lightbox.removeChild(currentEl);
+    currentEl=nextEl;
+    nextEl=null;
+    currentIndex=nextIndex;
+    isAnimating=false;
+  },300);
+}
+
+/* ===== Keyboard & Swipe ===== */
+document.addEventListener("keydown",e=>{
+  if(lightbox.classList.contains("hidden")) return;
+  if(e.key==="ArrowRight") navigate("next");
+  if(e.key==="ArrowLeft") navigate("prev");
+  if(e.key==="Escape") closeLightbox();
+});
+
+let touchStartX=0,touchStartY=0;
+const swipeThreshold=50;
+lightbox.addEventListener("touchstart",e=>{
+  if(e.touches.length===1){touchStartX=e.touches[0].clientX; touchStartY=e.touches[0].clientY;}
+},{passive:true});
+lightbox.addEventListener("touchend",e=>{
+  const deltaX=e.changedTouches[0].clientX-touchStartX;
+  const deltaY=e.changedTouches[0].clientY-touchStartY;
+  if(Math.abs(deltaY)>Math.abs(deltaX) && Math.abs(deltaY)>swipeThreshold && deltaY>0) closeLightbox();
+  else if(Math.abs(deltaX)>swipeThreshold) deltaX<0?navigate("next"):navigate("prev");
+},{passive:true});
+
+/* ===== Side Clickable Nav ===== */
+function addSideNav(){
+  const left=document.createElement("div");
+  const right=document.createElement("div");
+  [left,right].forEach(el=>{
+    Object.assign(el.style,{
+      position:"absolute", top:"0", bottom:"0", width:"20%", cursor:"pointer", zIndex:"10", background:"rgba(0,0,0,0)"
     });
-}, { rootMargin: "200px" });
+    lightbox.appendChild(el);
+  });
+  left.style.left="0"; right.style.right="0";
+  left.onclick=()=>navigate("prev");
+  right.onclick=()=>navigate("next");
+}
 
-/* ===== Create thumbnails ===== */
-function createItem(item, index) {
-    const container = document.createElement("div");
-    container.className = "item";
+/* ===== Copy Button ===== */
+lightboxCopy.onclick=()=>copyUrl(imageList[currentIndex],lightboxCopy);
 
-    let media;
-    if (item.optimized.match(/\.webm$/i)) {
-        media = document.createElement("video");
-        media.muted = true;
-        media.loop = true;
+/* ===== Close Button ===== */
+closeBtn.onclick=closeLightbox;
+lightbox.onclick=e=>{if(e.target===lightbox) closeLightbox();}
