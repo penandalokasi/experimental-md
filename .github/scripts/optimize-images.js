@@ -1,6 +1,6 @@
 // .github/scripts/optimize-images.js
-// Robust image optimizer: Sharp for static images, FFmpeg for GIF->WebM conversion.
-// Requires: node (ESM), sharp, glob. FFmpeg should be available on the runner.
+// Converts static images (JPG/PNG/WEBP) with Sharp and GIFs to WebM with FFmpeg.
+// Requires: ffmpeg, sharp, glob
 
 import fs from "fs";
 import path from "path";
@@ -13,151 +13,125 @@ const outDir = "images-optimized";
 const thumbDir = "images-thumbs";
 const indexFile = "index.json";
 
-// ensure output dirs
 fs.mkdirSync(outDir, { recursive: true });
 fs.mkdirSync(thumbDir, { recursive: true });
 
-/** Helper: run a command sync, return { ok, stdout, stderr, code } */
-function runCmd(cmd, args, opts = {}) {
-  const res = spawnSync(cmd, args, { encoding: "utf8", ...opts });
-  return {
-    ok: res.status === 0,
-    stdout: res.stdout ?? "",
-    stderr: res.stderr ?? "",
-    code: res.status
-  };
+function runCmd(cmd, args) {
+  const res = spawnSync(cmd, args, { encoding: "utf8" });
+  return { ok: res.status === 0, stdout: res.stdout, stderr: res.stderr, code: res.status };
 }
 
 // Check ffmpeg presence
-const ffprobe = runCmd("ffmpeg", ["-version"]);
-if (!ffprobe.ok) {
-  console.warn("⚠️ ffmpeg not found or not runnable in PATH. GIF -> WebM conversion will fail.");
-  console.warn("ffmpeg stdout/stderr:", ffprobe.stdout, ffprobe.stderr);
-  // we don't exit here; we will attempt but log conversion failures per-file.
+const ffCheck = runCmd("ffmpeg", ["-version"]);
+if (!ffCheck.ok) {
+  console.error("❌ FFmpeg not found in PATH. GIF → WebM conversion will fail.");
+} else {
+  console.log("✅ FFmpeg detected:", ffCheck.stdout.split("\n")[0]);
 }
 
-console.log("Searching for images...");
-
-// Use a case-insensitive glob pattern for supported extensions (recursive)
+// Find all supported files
 const pattern = `${srcDir}/**/*.+(jpg|jpeg|png|webp|gif|JPG|JPEG|PNG|WEBP|GIF)`;
 const files = await glob(pattern, { nocase: true });
-
 if (!files.length) {
-  console.log("❌ No images found in /images folder. Exiting.");
+  console.log("❌ No images found in /images");
   process.exit(0);
 }
-
-console.log(`Found ${files.length} file(s). Processing...`);
+console.log(`Found ${files.length} files to process.`);
 
 const indexData = [];
 
 for (const file of files) {
   try {
-    const extRaw = path.extname(file);
-    const ext = extRaw.toLowerCase();
-    const base = path.basename(file, extRaw);
-    console.log(`\n---\nProcessing: ${file} (ext=${ext})`);
+    const ext = path.extname(file).toLowerCase();
+    const base = path.basename(file, ext);
+    console.log(`\n---\nProcessing: ${file}`);
 
-    // GIF processing -> convert to webm for both optimized and thumbnail
+    /* ===== Handle GIFs via FFmpeg ===== */
     if (ext === ".gif") {
-      // Output paths
+      console.log("Detected GIF. Converting to WebM...");
+
       const optimizedWebM = path.join(outDir, `${base}.webm`);
       const thumbWebM = path.join(thumbDir, `${base}.webm`);
 
-      console.log("Detected GIF. Converting to WebM...");
-
-      // Convert full GIF -> webm (VP9) (no audio)
-      // Arguments: input, libvpx-vp9, quality tuned (crf), variable bitrate
-      const fullArgs = [
-        "-y",               // overwrite
-        "-i", file,         // input file
-        "-c:v", "libvpx-vp9",
-        "-b:v", "0",        // use CRF mode
-        "-crf", "35",       // quality
-        "-an",              // strip audio if any
-        optimizedWebM
-      ];
-      let r = runCmd("ffmpeg", fullArgs, { stdio: "pipe" });
-      if (!r.ok) {
-        console.error(`❌ ffmpeg failed converting full GIF -> WebM for ${file}`);
-        console.error("ffmpeg stderr:", r.stderr.slice(0, 2000));
-        // fallback: copy original GIF as optimized (not ideal, but prevents missing assets)
-        try {
-          fs.copyFileSync(file, path.join(outDir, `${base}.gif`));
-          console.warn("Copied original GIF to images-optimized as fallback.");
-          indexData.push({
-            original: path.relative(".", file).replace(/\\/g, "/"),
-            optimized: { gif: path.relative(".", path.join(outDir, `${base}.gif`)).replace(/\\/g, "/") },
-            thumbnail: { gif: path.relative(".", path.join(thumbDir, `${base}.gif`)).replace(/\\/g, "/") },
-            format: "gif"
-          });
-        } catch (copyErr) {
-          console.error("❌ Also failed to copy fallback GIF:", copyErr);
-        }
-        continue; // move to next file
-      } else {
-        console.log("Converted full GIF ->", optimizedWebM);
-      }
-
-      // Create square-cropped thumbnail WebM (limit to 3s)
-      // scale then crop to 480x480, set duration -t 3 (if shorter, ffmpeg will not fail)
-      const thumbArgs = [
+      // Try VP9 first
+      let args = [
         "-y",
+        "-hide_banner",
         "-i", file,
-        "-vf", "scale=480:480:force_original_aspect_ratio=increase,crop=480:480,setsar=1",
-        "-an",
-        "-t", "3",
+        "-pix_fmt", "yuv420p",
         "-c:v", "libvpx-vp9",
         "-b:v", "0",
-        "-crf", "40",
-        thumbWebM
+        "-crf", "35",
+        "-auto-alt-ref", "0",
+        "-an",
+        optimizedWebM
       ];
-      r = runCmd("ffmpeg", thumbArgs, { stdio: "pipe" });
+      let r = runCmd("ffmpeg", args);
+
+      // Fallback to VP8 if VP9 fails
       if (!r.ok) {
-        console.error(`❌ ffmpeg failed creating thumbnail WebM for ${file}`);
-        console.error("ffmpeg stderr:", r.stderr.slice(0, 2000));
-        // fallback: generate a static thumbnail PNG using sharp (first frame)
-        try {
-          const thumbPng = path.join(thumbDir, `${base}.png`);
-          await sharp(file, { animated: true, pages: 1 })
-            .resize({ width: 480, height: 480, fit: "cover", position: "centre" })
-            .png({ quality: 70 })
-            .toFile(thumbPng);
-          console.warn("Created static PNG thumbnail as fallback:", thumbPng);
-          indexData.push({
-            original: path.relative(".", file).replace(/\\/g, "/"),
-            optimized: { webm: path.relative(".", optimizedWebM).replace(/\\/g, "/") },
-            thumbnail: { png: path.relative(".", thumbPng).replace(/\\/g, "/") },
-            format: "webm"
-          });
-        } catch (pngErr) {
-          console.error("❌ Failed to create fallback PNG thumbnail:", pngErr);
-        }
-        continue;
-      } else {
-        console.log("Created thumbnail WebM ->", thumbWebM);
+        console.warn("⚠️ VP9 failed, retrying with VP8...");
+        args = [
+          "-y",
+          "-hide_banner",
+          "-i", file,
+          "-pix_fmt", "yuv420p",
+          "-c:v", "libvpx",
+          "-b:v", "0",
+          "-crf", "30",
+          "-an",
+          optimizedWebM
+        ];
+        r = runCmd("ffmpeg", args);
       }
 
-      // Success
+      if (!r.ok) {
+        console.error(`❌ FFmpeg failed for ${file}`);
+        console.error(r.stderr.slice(0, 1000));
+        fs.copyFileSync(file, path.join(outDir, `${base}.gif`));
+        console.warn("Copied original GIF as fallback.");
+        continue;
+      }
+      console.log("Converted full GIF →", optimizedWebM);
+
+      // Create thumbnail WebM (3 seconds, square crop)
+      const thumbArgs = [
+        "-y",
+        "-hide_banner",
+        "-i", file,
+        "-vf",
+        "fps=15,scale=480:480:force_original_aspect_ratio=increase,crop=480:480,setsar=1",
+        "-t", "3",
+        "-pix_fmt", "yuv420p",
+        "-c:v", "libvpx",
+        "-b:v", "0",
+        "-crf", "40",
+        "-an",
+        thumbWebM
+      ];
+      const rThumb = runCmd("ffmpeg", thumbArgs);
+      if (!rThumb.ok) {
+        console.error("❌ Failed to create thumbnail WebM:", rThumb.stderr.slice(0, 800));
+        continue;
+      }
+      console.log("Created thumbnail WebM →", thumbWebM);
+
       indexData.push({
         original: path.relative(".", file).replace(/\\/g, "/"),
         optimized: { webm: path.relative(".", optimizedWebM).replace(/\\/g, "/") },
         thumbnail: { webm: path.relative(".", thumbWebM).replace(/\\/g, "/") },
         format: "webm"
       });
-
-      continue; // done with this file
+      continue;
     }
 
-    // Non-GIF static images: generate AVIF + WebP + square thumbnails
+    /* ===== Handle static images via Sharp ===== */
+    console.log("Static image. Optimizing with Sharp...");
     const optimizedWebP = path.join(outDir, `${base}.webp`);
     const optimizedAVIF = path.join(outDir, `${base}.avif`);
     const thumbWebP = path.join(thumbDir, `${base}.webp`);
     const thumbAVIF = path.join(thumbDir, `${base}.avif`);
 
-    console.log("Static image: generating WebP and AVIF (full + thumb) ...");
-
-    // Full optimized
     await sharp(file)
       .resize({ width: 1920, withoutEnlargement: true })
       .webp({ quality: 80 })
@@ -167,7 +141,6 @@ for (const file of files) {
       .avif({ quality: 60 })
       .toFile(optimizedAVIF);
 
-    // Thumbnails (square)
     await sharp(file)
       .resize({ width: 480, height: 480, fit: "cover", position: "centre" })
       .webp({ quality: 60 })
@@ -190,10 +163,10 @@ for (const file of files) {
       format: "image"
     });
   } catch (err) {
-    console.error(`❌ Error processing file ${file}:`, err);
+    console.error(`❌ Error processing ${file}:`, err);
   }
-} // end for
+}
 
 // Write index.json
 fs.writeFileSync(indexFile, JSON.stringify(indexData, null, 2));
-console.log(`\n✅ Done. ${indexData.length} entries written to ${indexFile}`);
+console.log(`\n✅ Done! ${indexData.length} items written to ${indexFile}`);
