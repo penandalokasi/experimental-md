@@ -50,7 +50,7 @@ jobs:
                 # First pass
                 convert "$file[0]" \
                   -strip \
-                  -resize 1600x1600\> \
+                  -resize 600x600\> \
                   -colors 256 \
                   -quality 75 \
                   "$output"
