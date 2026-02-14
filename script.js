@@ -112,7 +112,7 @@ function copyUrl(item, button) {
 /* ===== Lightbox ===== */
 function openLightbox(index) {
     currentIndex = index;
-    showImage(index, null);
+    showImage(index, null); // no animation on first open
     lightbox.classList.remove("hidden");
     document.body.classList.add("no-scroll");
 }
@@ -132,17 +132,10 @@ function showImage(index, direction) {
     const item = imageList[index];
     const src = `images-optimized/${item.optimized}`;
 
-    // Remove existing video
-    if (lightboxVideo) {
-        lightboxVideo.pause();
-        lightboxVideo.remove();
-        lightboxVideo = null;
-    }
-
-    // Create the new element (img or video)
     let newEl;
     if (item.optimized.match(/\.webm$/i)) {
         lightboxImg.style.display = "none";
+
         newEl = document.createElement("video");
         newEl.src = src;
         newEl.controls = true;
@@ -150,38 +143,129 @@ function showImage(index, direction) {
         newEl.loop = true;
         newEl.style.maxWidth = "90vw";
         newEl.style.maxHeight = "90vh";
+
         lightbox.appendChild(newEl);
         lightboxVideo = newEl;
     } else {
-        newEl = lightboxImg;
         lightboxImg.style.display = "block";
         lightboxImg.src = src;
+        newEl = lightboxImg;
     }
 
-    // Animation
+    // Animate transition if direction specified
     if (direction) {
         const distance = direction === "next" ? "100%" : "-100%";
-        newEl.style.transition = "none";
-        newEl.style.transform = `translateX(${distance})`;
-        requestAnimationFrame(() => {
+
+        // Create temporary clone of previous element
+        let prevEl;
+        if (lightboxVideo && lightboxVideo !== newEl) prevEl = lightboxVideo.cloneNode(true);
+        else if (lightboxImg !== newEl) prevEl = lightboxImg.cloneNode(true);
+
+        if (prevEl) {
+            prevEl.style.position = "absolute";
+            prevEl.style.top = "50%";
+            prevEl.style.left = "50%";
+            prevEl.style.transform = "translate(-50%, -50%)";
+            prevEl.style.transition = "transform 0.3s ease";
+            lightbox.appendChild(prevEl);
+
+            // Animate previous element out
+            requestAnimationFrame(() => {
+                prevEl.style.transform = `translate(${direction === "next" ? "-150%" : "150%"}, -50%)`;
+            });
+
+            // Remove clone after animation
+            setTimeout(() => prevEl.remove(), 300);
+        }
+
+        // Animate new element in
+        if (newEl !== lightboxImg) {
+            newEl.style.position = "absolute";
+            newEl.style.top = "50%";
+            newEl.style.left = direction === "next" ? "150%" : "-150%";
+            newEl.style.transform = "translate(-50%, -50%)";
             newEl.style.transition = "transform 0.3s ease";
-            newEl.style.transform = "translateX(0)";
-            if (lightboxImg !== newEl) {
-                // Animate previous element out
-                const prevEl = lightboxImg.style.display === "block" ? lightboxImg : lightboxVideo;
-                prevEl.style.transition = "transform 0.3s ease";
-                prevEl.style.transform = direction === "next" ? "translateX(-100%)" : "translateX(100%)";
-                setTimeout(() => {
-                    if (prevEl !== lightboxImg) prevEl.remove();
-                    prevEl.style.transition = "";
-                    prevEl.style.transform = "";
-                }, 300);
-            }
-        });
+
+            requestAnimationFrame(() => {
+                newEl.style.left = "50%";
+                newEl.style.transform = "translate(-50%, -50%)";
+            });
+
+            setTimeout(() => {
+                newEl.style.position = "";
+                newEl.style.top = "";
+                newEl.style.left = "";
+                newEl.style.transform = "";
+                newEl.style.transition = "";
+            }, 300);
+        }
     }
 }
 
 /* ===== Buttons ===== */
 closeBtn.onclick = closeLightbox;
 
-lightbox.onclick = (e) =>
+lightbox.onclick = (e) => {
+    if (e.target === lightbox) closeLightbox();
+};
+
+lightboxCopy.onclick = () => {
+    copyUrl(imageList[currentIndex], lightboxCopy);
+};
+
+/* ===== Swipe gestures ===== */
+let touchStartX = 0;
+let touchStartY = 0;
+let touchEndX = 0;
+let touchEndY = 0;
+const swipeThreshold = 50;
+
+lightbox.addEventListener("touchstart", (e) => {
+    if (e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    }
+}, {passive: true});
+
+lightbox.addEventListener("touchend", (e) => {
+    touchEndX = e.changedTouches[0].clientX;
+    touchEndY = e.changedTouches[0].clientY;
+
+    const deltaX = touchEndX - touchStartX;
+    const deltaY = touchEndY - touchStartY;
+
+    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > swipeThreshold) {
+        if (deltaY > 0) closeLightbox(); // Swipe down
+    } else if (Math.abs(deltaX) > swipeThreshold) {
+        if (deltaX < 0 && currentIndex < imageList.length - 1) {
+            currentIndex++;
+            showImage(currentIndex, "next");
+        } else if (deltaX > 0 && currentIndex > 0) {
+            currentIndex--;
+            showImage(currentIndex, "prev");
+        }
+    }
+}, {passive: true});
+
+/* ===== Keyboard navigation ===== */
+document.addEventListener("keydown", (e) => {
+    if (lightbox.classList.contains("hidden")) return;
+
+    switch (e.key) {
+        case "ArrowRight":
+            if (currentIndex < imageList.length - 1) {
+                currentIndex++;
+                showImage(currentIndex, "next");
+            }
+            break;
+        case "ArrowLeft":
+            if (currentIndex > 0) {
+                currentIndex--;
+                showImage(currentIndex, "prev");
+            }
+            break;
+        case "Escape":
+            closeLightbox();
+            break;
+    }
+});
