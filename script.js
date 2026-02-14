@@ -117,7 +117,8 @@ function openLightbox(index){
     border:"none",
     borderRadius:"3px",
     padding:"5px 10px",
-    cursor:"pointer"
+    cursor:"pointer",
+    outline: "none"   // prevent blue focus box
   });
   xBtn.onclick = closeLightbox;
   lightbox.appendChild(xBtn);
@@ -188,11 +189,19 @@ function addSideNav(){
   const right=document.createElement("div");
   [left,right].forEach(el=>{
     Object.assign(el.style,{
-      position:"absolute", top:"0", bottom:"0", width:"20%", cursor:"pointer", zIndex:"10", background:"rgba(0,0,0,0)"
+      position:"absolute",
+      top:"0",
+      bottom:"0",
+      width:"20%",
+      cursor:"pointer",
+      zIndex:"10",
+      background:"rgba(0,0,0,0)",
+      outline: "none"   // remove blue focus box
     });
     lightbox.appendChild(el);
   });
-  left.style.left="0"; right.style.right="0";
+  left.style.left="0"; 
+  right.style.right="0";
   left.onclick=()=>navigate("prev");
   right.onclick=()=>navigate("next");
 }
