@@ -9,11 +9,9 @@ const outDir = "images-optimized";
 const thumbDir = "images-thumbs";
 const indexFile = "index.json";
 
-// Create output directories
 fs.mkdirSync(outDir, { recursive: true });
 fs.mkdirSync(thumbDir, { recursive: true });
 
-// Collect all supported image files
 const files = glob.sync(`${srcDir}/**/*.{jpg,jpeg,png,webp}`, { nodir: true });
 
 if (!files.length) {
@@ -26,45 +24,52 @@ const indexData = [];
 for (const file of files) {
   const ext = path.extname(file);
   const base = path.basename(file, ext);
-  const optimizedName = `${base}.webp`;
-  const thumbName = `${base}.webp`;
-
-  const optimizedPath = path.join(outDir, optimizedName);
-  const thumbPath = path.join(thumbDir, thumbName);
 
   console.log(`🪄 Processing: ${file}`);
 
-  try {
-    // Full optimized image
-    await sharp(file)
-      .resize({
-        width: 1920,
-        withoutEnlargement: true
-      })
-      .webp({ quality: 80 })
-      .toFile(optimizedPath);
+  const optimizedWebP = path.join(outDir, `${base}.webp`);
+  const optimizedAVIF = path.join(outDir, `${base}.avif`);
+  const thumbWebP = path.join(thumbDir, `${base}.webp`);
+  const thumbAVIF = path.join(thumbDir, `${base}.avif`);
 
-    // Square thumbnail
+  try {
+    // ---- Full Optimized ----
     await sharp(file)
-      .resize({
-        width: 480,
-        height: 480,
-        fit: "cover",
-        position: "centre"
-      })
+      .resize({ width: 1920, withoutEnlargement: true })
+      .webp({ quality: 80 })
+      .toFile(optimizedWebP);
+
+    await sharp(file)
+      .resize({ width: 1920, withoutEnlargement: true })
+      .avif({ quality: 60 })
+      .toFile(optimizedAVIF);
+
+    // ---- Thumbnails (square) ----
+    await sharp(file)
+      .resize({ width: 480, height: 480, fit: "cover", position: "centre" })
       .webp({ quality: 60 })
-      .toFile(thumbPath);
+      .toFile(thumbWebP);
+
+    await sharp(file)
+      .resize({ width: 480, height: 480, fit: "cover", position: "centre" })
+      .avif({ quality: 50 })
+      .toFile(thumbAVIF);
 
     indexData.push({
       original: path.relative(".", file).replace(/\\/g, "/"),
-      optimized: path.relative(".", optimizedPath).replace(/\\/g, "/"),
-      thumbnail: path.relative(".", thumbPath).replace(/\\/g, "/")
+      optimized: {
+        webp: path.relative(".", optimizedWebP).replace(/\\/g, "/"),
+        avif: path.relative(".", optimizedAVIF).replace(/\\/g, "/")
+      },
+      thumbnail: {
+        webp: path.relative(".", thumbWebP).replace(/\\/g, "/"),
+        avif: path.relative(".", thumbAVIF).replace(/\\/g, "/")
+      }
     });
   } catch (err) {
     console.error(`❌ Error processing ${file}:`, err);
   }
 }
 
-// Save JSON index
 fs.writeFileSync(indexFile, JSON.stringify(indexData, null, 2));
 console.log(`✅ Done. ${indexData.length} images processed.`);
