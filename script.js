@@ -102,6 +102,26 @@ function openLightbox(index){
   currentEl=createLightboxEl(imageList[currentIndex]);
   lightbox.innerHTML="";
   lightbox.appendChild(currentEl);
+
+  // Add X close button
+  const xBtn = document.createElement("button");
+  xBtn.textContent = "✕";
+  Object.assign(xBtn.style,{
+    position:"absolute",
+    top:"10px",
+    right:"10px",
+    zIndex:"20",
+    fontSize:"1.8rem",
+    background:"rgba(0,0,0,0.5)",
+    color:"#fff",
+    border:"none",
+    borderRadius:"3px",
+    padding:"5px 10px",
+    cursor:"pointer"
+  });
+  xBtn.onclick = closeLightbox;
+  lightbox.appendChild(xBtn);
+
   lightbox.classList.remove("hidden");
   document.body.classList.add("no-scroll");
   addSideNav();
@@ -183,24 +203,3 @@ lightboxCopy.onclick=()=>copyUrl(imageList[currentIndex],lightboxCopy);
 /* ===== Close Button ===== */
 closeBtn.onclick=closeLightbox;
 lightbox.onclick=e=>{if(e.target===lightbox) closeLightbox();}
-
-/* ===== Extra Close Button Inside Lightbox ===== */
-function addCloseButton(){
-  const btn=document.createElement("button");
-  btn.textContent="✕";
-  Object.assign(btn.style,{
-    position:"absolute",
-    top:"10px",
-    right:"10px",
-    zIndex:"20",
-    fontSize:"24px",
-    background:"rgba(0,0,0,0.5)",
-    color:"#fff",
-    border:"none",
-    borderRadius:"4px",
-    padding:"4px 8px",
-    cursor:"pointer"
-  });
-  btn.onclick=closeLightbox;
-  lightbox.appendChild(btn);
-}
