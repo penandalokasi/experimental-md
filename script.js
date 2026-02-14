@@ -100,7 +100,7 @@ function copyUrl(item, btn) {
 /* ===== Lightbox ===== */
 function createLightboxEl(item) {
   if (item.format === "webm") {
-    // 🟢 Lightbox WebM video
+    // 🟢 WebM video
     const video = document.createElement("video");
     Object.assign(video, {
       src: item.optimized.webm,
@@ -117,9 +117,18 @@ function createLightboxEl(item) {
       maxWidth: "90vw",
       maxHeight: "90vh"
     });
+
+    // Middle-click (open video in new tab)
+    video.addEventListener("auxclick", e => {
+      if (e.button === 1) {
+        e.preventDefault();
+        window.open(item.optimized.webm, "_blank");
+      }
+    });
+
     return video;
   } else {
-    // 🟢 Lightbox image (AVIF + WebP)
+    // 🟢 Image (AVIF + WebP fallback)
     const picture = document.createElement("picture");
     const sourceAvif = document.createElement("source");
     sourceAvif.type = "image/avif";
@@ -139,6 +148,15 @@ function createLightboxEl(item) {
       maxHeight: "90vh",
       transition: "transform 0.3s ease,left 0.3s ease"
     });
+
+    // Middle-click (open image in new tab)
+    img.addEventListener("auxclick", e => {
+      if (e.button === 1) {
+        e.preventDefault();
+        window.open(item.optimized.webp, "_blank");
+      }
+    });
+
     picture.append(sourceAvif, sourceWebp, img);
     return picture;
   }
@@ -278,7 +296,12 @@ function addSideNav() {
   right.onclick = () => navigate("next");
 }
 
-/* ===== Close Buttons ===== */
+/* ===== Close Buttons & Right-click Fix ===== */
 lightboxCopy.onclick = () => copyUrl(imageList[currentIndex], lightboxCopy);
 closeBtn.onclick = closeLightbox;
-lightbox.onclick = e => { if (e.target === lightbox) closeLightbox(); };
+
+// 🧠 FIXED: Only left-click on background closes lightbox.
+// Right-click and middle-click are ignored (so context menu works).
+lightbox.onclick = e => {
+  if (e.button === 0 && e.target === lightbox) closeLightbox();
+};
