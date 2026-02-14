@@ -31,35 +31,49 @@ fetch("index.json")
   })
   .catch(err => gallery.innerHTML = err);
 
-/* ===== Create Thumbnails (with <picture>) ===== */
+/* ===== Create Thumbnails ===== */
 function createThumbnail(item, index) {
   const container = document.createElement("div");
   container.className = "item";
 
-  const picture = document.createElement("picture");
+  if (item.format === "webm") {
+    // 🟢 WebM video (converted from GIF)
+    const video = document.createElement("video");
+    Object.assign(video, {
+      src: item.thumbnail.webm,
+      autoplay: true,
+      loop: true,
+      muted: true,
+      playsInline: true
+    });
+    Object.assign(video.style, {
+      width: "100%",
+      height: "100%",
+      objectFit: "cover",
+      display: "block",
+      cursor: "zoom-in"
+    });
+    video.onclick = () => openLightbox(index);
+    container.appendChild(video);
+  } else {
+    // 🟢 Image (AVIF + WebP fallback)
+    const picture = document.createElement("picture");
+    const sourceAvif = document.createElement("source");
+    sourceAvif.type = "image/avif";
+    sourceAvif.srcset = item.thumbnail.avif;
+    const sourceWebp = document.createElement("source");
+    sourceWebp.type = "image/webp";
+    sourceWebp.srcset = item.thumbnail.webp;
+    const img = document.createElement("img");
+    img.src = item.thumbnail.webp;
+    img.alt = item.original;
+    img.draggable = false;
+    img.onclick = () => openLightbox(index);
+    picture.append(sourceAvif, sourceWebp, img);
+    container.appendChild(picture);
+  }
 
-  const srcAvif = item.thumbnail?.avif || `${config.thumbFolder}/${item.original}.avif`;
-  const srcWebp = item.thumbnail?.webp || `${config.thumbFolder}/${item.original}.webp`;
-
-  const sourceAvif = document.createElement("source");
-  sourceAvif.type = "image/avif";
-  sourceAvif.srcset = srcAvif;
-
-  const sourceWebp = document.createElement("source");
-  sourceWebp.type = "image/webp";
-  sourceWebp.srcset = srcWebp;
-
-  const img = document.createElement("img");
-  img.src = srcWebp;
-  img.alt = item.original;
-  img.draggable = false;
-  img.dataset.index = index;
-  img.onclick = () => openLightbox(index);
-
-  picture.append(sourceAvif, sourceWebp, img);
-  container.appendChild(picture);
-
-  // Copy button
+  // Copy URL button
   const btn = document.createElement("button");
   btn.textContent = "Copy URL";
   btn.onclick = e => {
@@ -83,36 +97,51 @@ function copyUrl(item, btn) {
   });
 }
 
-/* ===== Lightbox (with <picture>) ===== */
+/* ===== Lightbox ===== */
 function createLightboxEl(item) {
-  const picture = document.createElement("picture");
-
-  const srcAvif = item.optimized?.avif || `${config.displayFolder}/${item.original}.avif`;
-  const srcWebp = item.optimized?.webp || `${config.displayFolder}/${item.original}.webp`;
-
-  const sourceAvif = document.createElement("source");
-  sourceAvif.type = "image/avif";
-  sourceAvif.srcset = srcAvif;
-
-  const sourceWebp = document.createElement("source");
-  sourceWebp.type = "image/webp";
-  sourceWebp.srcset = srcWebp;
-
-  const img = document.createElement("img");
-  img.src = srcWebp;
-  img.alt = item.original;
-  Object.assign(img.style, {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    transform: "translate(-50%,-50%)",
-    maxWidth: "90vw",
-    maxHeight: "90vh",
-    transition: "transform 0.3s ease,left 0.3s ease"
-  });
-
-  picture.append(sourceAvif, sourceWebp, img);
-  return picture;
+  if (item.format === "webm") {
+    // 🟢 Lightbox WebM video
+    const video = document.createElement("video");
+    Object.assign(video, {
+      src: item.optimized.webm,
+      controls: true,
+      autoplay: true,
+      loop: true,
+      playsInline: true
+    });
+    Object.assign(video.style, {
+      position: "absolute",
+      top: "50%",
+      left: "50%",
+      transform: "translate(-50%,-50%)",
+      maxWidth: "90vw",
+      maxHeight: "90vh"
+    });
+    return video;
+  } else {
+    // 🟢 Lightbox image (AVIF + WebP)
+    const picture = document.createElement("picture");
+    const sourceAvif = document.createElement("source");
+    sourceAvif.type = "image/avif";
+    sourceAvif.srcset = item.optimized.avif;
+    const sourceWebp = document.createElement("source");
+    sourceWebp.type = "image/webp";
+    sourceWebp.srcset = item.optimized.webp;
+    const img = document.createElement("img");
+    img.src = item.optimized.webp;
+    img.alt = item.original;
+    Object.assign(img.style, {
+      position: "absolute",
+      top: "50%",
+      left: "50%",
+      transform: "translate(-50%,-50%)",
+      maxWidth: "90vw",
+      maxHeight: "90vh",
+      transition: "transform 0.3s ease,left 0.3s ease"
+    });
+    picture.append(sourceAvif, sourceWebp, img);
+    return picture;
+  }
 }
 
 function openLightbox(index) {
@@ -140,7 +169,7 @@ function openLightbox(index) {
   xBtn.onclick = closeLightbox;
   lightbox.appendChild(xBtn);
 
-  // Copy button
+  // Copy URL button
   const copyBtn = document.createElement("button");
   copyBtn.textContent = "Copy URL";
   Object.assign(copyBtn.style, {
@@ -190,6 +219,7 @@ function navigate(direction) {
 
   isAnimating = true;
   setTimeout(() => {
+    if (currentEl?.tagName === "VIDEO") currentEl.pause?.();
     lightbox.removeChild(currentEl);
     currentEl = nextEl;
     nextEl = null;
