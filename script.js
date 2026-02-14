@@ -105,9 +105,6 @@ function openLightbox(index){
   lightbox.classList.remove("hidden");
   document.body.classList.add("no-scroll");
   addSideNav();
-  // Ensure close button is visible and works
-  closeBtn.style.display = "block";
-  closeBtn.onclick = closeLightbox;
 }
 
 function closeLightbox(){
@@ -155,22 +152,9 @@ document.addEventListener("keydown",e=>{
 
 let touchStartX=0,touchStartY=0;
 const swipeThreshold=50;
-
 lightbox.addEventListener("touchstart",e=>{
-  if(e.touches.length===1){
-    touchStartX=e.touches[0].clientX;
-    touchStartY=e.touches[0].clientY;
-  }
+  if(e.touches.length===1){touchStartX=e.touches[0].clientX; touchStartY=e.touches[0].clientY;}
 },{passive:true});
-
-lightbox.addEventListener("touchmove", e => {
-  // Prevent background scrolling during vertical swipe
-  if(!lightbox.classList.contains("hidden") && e.touches.length === 1){
-    const deltaY = e.touches[0].clientY - touchStartY;
-    if(Math.abs(deltaY) > 0) e.preventDefault();
-  }
-},{passive:false});
-
 lightbox.addEventListener("touchend",e=>{
   const deltaX=e.changedTouches[0].clientX-touchStartX;
   const deltaY=e.changedTouches[0].clientY-touchStartY;
