@@ -16,32 +16,35 @@ header {
     color: #fff;
 }
 
-/* ===== Gallery Grid ===== */
+/* ===== Desktop (default) ===== */
 .gallery {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px; /* Prevent layout jump */
-    padding: 0;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
 }
 
-/* Responsive columns */
-@media (max-width: 1200px) {
+/* Large tablet / small laptop */
+@media (max-width: 1400px) {
+    .gallery {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+/* Tablet */
+@media (max-width: 900px) {
     .gallery {
         grid-template-columns: repeat(3, 1fr);
     }
 }
 
-@media (max-width: 800px) {
+/* Mobile */
+@media (max-width: 500px) {
     .gallery {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
     }
 }
 
-@media (max-width: 500px) {
-    .gallery {
-        grid-template-columns: repeat(1, 1fr);
-    }
-}
 
 /* ===== Gallery Items (Square + Stable) ===== */
 .item,
