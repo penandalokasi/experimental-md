@@ -1,208 +1,142 @@
-/* ===== Config ===== */
-const config = {
-    user: "penandalokasi",
-    repo: "experimental-md",
-    branch: "main",
-    displayFolder: "images-optimized",
-    originalFolder: "images"
-};
+<script>
+const optimizedBase = "/experimental-md/images-optimized/";
+const originalBase = "https://raw.githubusercontent.com/penandalokasi/experimental-md/main/images/";
+const jsonPath = "/experimental-md/images.json";
 
-/* ===== Base path (GitHub Pages project support) ===== */
-const basePath = location.pathname.replace(/\/index\.html$/, "").replace(/\/$/, "");
-
-/* ===== Elements ===== */
 const gallery = document.getElementById("gallery");
-const lightbox = document.getElementById("lightbox");
-const lightboxImg = document.getElementById("lightboxImg"); // used for images
-const closeBtn = document.getElementById("closeBtn");
-const lightboxCopy = document.getElementById("lightboxCopy");
 
-/* We'll dynamically create a video element for webm */
-let lightboxVideo = null;
+fetch(jsonPath)
+  .then(res => res.json())
+  .then(files => {
+    files.forEach((file, index) => {
+      const optimizedUrl = optimizedBase + file.optimized;
+      const originalUrl = originalBase + file.original;
 
-let imageList = [];
-let currentIndex = 0;
+      const item = document.createElement("div");
+      item.className = "gallery-item";
 
-/* ===== Load index.json ===== */
-fetch(`${basePath}/${config.displayFolder}/index.json`)
-    .then(res => {
-        if (!res.ok) throw new Error("index.json not found");
-        return res.json();
-    })
-    .then(files => {
-        imageList = files.sort((a, b) =>
-            b.optimized.localeCompare(a.optimized)
-        );
+      // Detect video
+      const isVideo = file.optimized.endsWith(".webm");
 
-        imageList.forEach((item, index) => createItem(item, index));
-    })
-    .catch(err => {
-        console.error(err);
-        gallery.innerHTML = "Failed to load images.";
-    });
+      let media;
 
-/* ===== Lazy loading ===== */
-const observer = new IntersectionObserver((entries, obs) => {
-    entries.forEach(entry => {
-        if (!entry.isIntersecting) return;
-
-        const el = entry.target;
-        el.src = el.dataset.src;
-
-        if (el.tagName === "VIDEO") {
-            el.play().catch(() => {});
-        }
-
-        obs.unobserve(el);
-    });
-}, { rootMargin: "200px" });
-
-/* ===== Create thumbnails ===== */
-function createItem(item, index) {
-    const container = document.createElement("div");
-    container.className = "item";
-
-    let media;
-
-    if (item.optimized.match(/\.webm$/i)) {
+      if (isVideo) {
         media = document.createElement("video");
+        media.src = optimizedUrl;
         media.muted = true;
         media.loop = true;
         media.playsInline = true;
-        media.autoplay = true;
-    } else {
+        media.preload = "metadata";
+        media.className = "thumb";
+        media.addEventListener("mouseenter", () => media.play());
+        media.addEventListener("mouseleave", () => media.pause());
+      } else {
         media = document.createElement("img");
-        media.draggable = false;
-    }
+        media.src = optimizedUrl;
+        media.loading = "lazy";
+        media.className = "thumb";
+      }
 
-    media.dataset.src = `${basePath}/${config.displayFolder}/${item.optimized}`;
-    media.alt = item.optimized;
+      // Open lightbox
+      media.addEventListener("click", () => openLightbox(index));
 
-    observer.observe(media);
-    media.onclick = () => openLightbox(index);
-
-    const btn = document.createElement("button");
-    btn.textContent = "Copy URL";
-    btn.onclick = (e) => {
+      // Copy button (always visible)
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "copy-btn";
+      copyBtn.textContent = "Copy URL";
+      copyBtn.onclick = (e) => {
         e.stopPropagation();
-        copyUrl(item, btn);
-    };
+        navigator.clipboard.writeText(originalUrl);
+      };
 
-    container.appendChild(media);
-    container.appendChild(btn);
-    gallery.appendChild(container);
-}
-
-/* ===== Copy original URL ===== */
-function copyUrl(item, button) {
-    const url = `https://raw.githubusercontent.com/${config.user}/${config.repo}/${config.branch}/${config.originalFolder}/${item.original}`;
-
-    navigator.clipboard.writeText(url).then(() => {
-        if (button) {
-            const original = button.textContent;
-            button.textContent = "Copied";
-            setTimeout(() => button.textContent = original, 1200);
-        }
+      item.appendChild(media);
+      item.appendChild(copyBtn);
+      gallery.appendChild(item);
     });
-}
 
-/* ===== Lightbox ===== */
+    window.galleryData = files;
+  });
+
+/* Lightbox */
+
+const lightbox = document.getElementById("lightbox");
+const lightboxContent = document.getElementById("lightbox-content");
+const lightboxCopy = document.getElementById("lightbox-copy");
+
+let currentIndex = 0;
+
 function openLightbox(index) {
-    currentIndex = index;
-    showImage(index);
-    lightbox.classList.remove("hidden");
-    document.body.classList.add("no-scroll");
+  currentIndex = index;
+  showLightboxItem();
+  lightbox.classList.add("active");
 }
 
 function closeLightbox() {
-    lightbox.classList.add("hidden");
-    document.body.classList.remove("no-scroll");
-
-    if (lightboxVideo) {
-        lightboxVideo.pause();
-    }
+  lightbox.classList.remove("active");
+  lightboxContent.innerHTML = "";
 }
 
-function showImage(index) {
-    if (index < 0 || index >= imageList.length) return;
+function showLightboxItem() {
+  const file = window.galleryData[currentIndex];
+  const optimizedUrl = optimizedBase + file.optimized;
+  const originalUrl = originalBase + file.original;
 
-    const item = imageList[index];
-    currentIndex = index;
+  lightboxContent.innerHTML = "";
 
-    const src = `${basePath}/${config.displayFolder}/${item.optimized}`;
+  const isVideo = file.optimized.endsWith(".webm");
 
-    /* Remove existing video if any */
-    if (lightboxVideo) {
-        lightboxVideo.remove();
-        lightboxVideo = null;
-    }
+  let media;
 
-    if (item.optimized.match(/\.webm$/i)) {
-        /* Hide image */
-        lightboxImg.style.display = "none";
+  if (isVideo) {
+    media = document.createElement("video");
+    media.src = optimizedUrl;
+    media.controls = true;
+    media.autoplay = true;
+    media.loop = true;
+    media.className = "lightbox-media";
+  } else {
+    media = document.createElement("img");
+    media.src = optimizedUrl;
+    media.className = "lightbox-media";
+  }
 
-        /* Create video */
-        lightboxVideo = document.createElement("video");
-        lightboxVideo.src = src;
-        lightboxVideo.controls = true;
-        lightboxVideo.autoplay = true;
-        lightboxVideo.loop = true;
-        lightboxVideo.style.maxWidth = "90vw";
-        lightboxVideo.style.maxHeight = "90vh";
+  lightboxContent.appendChild(media);
 
-        lightbox.appendChild(lightboxVideo);
-    } else {
-        /* Show image */
-        lightboxImg.style.display = "block";
-        lightboxImg.src = src;
-    }
+  // Copy ORIGINAL url
+  lightboxCopy.onclick = () => {
+    navigator.clipboard.writeText(originalUrl);
+  };
 }
 
-closeBtn.onclick = closeLightbox;
+/* Navigation */
 
-lightbox.onclick = (e) => {
-    if (e.target === lightbox) closeLightbox();
+document.getElementById("lightbox-close").onclick = closeLightbox;
+document.getElementById("lightbox-prev").onclick = () => {
+  currentIndex = (currentIndex - 1 + window.galleryData.length) % window.galleryData.length;
+  showLightboxItem();
+};
+document.getElementById("lightbox-next").onclick = () => {
+  currentIndex = (currentIndex + 1) % window.galleryData.length;
+  showLightboxItem();
 };
 
-lightboxCopy.onclick = () => {
-    copyUrl(imageList[currentIndex], lightboxCopy);
-};
+/* Swipe support */
 
-/* ===== Keyboard navigation ===== */
-document.addEventListener("keydown", (e) => {
-    if (lightbox.classList.contains("hidden")) return;
-
-    if (e.key === "Escape") closeLightbox();
-    if (e.key === "ArrowRight") nextImage();
-    if (e.key === "ArrowLeft") prevImage();
+let startX = 0;
+lightbox.addEventListener("touchstart", e => {
+  startX = e.touches[0].clientX;
 });
 
-/* ===== Navigation ===== */
-function nextImage() {
-    if (currentIndex < imageList.length - 1) {
-        showImage(currentIndex + 1);
+lightbox.addEventListener("touchend", e => {
+  const endX = e.changedTouches[0].clientX;
+  const diff = startX - endX;
+
+  if (Math.abs(diff) > 50) {
+    if (diff > 0) {
+      document.getElementById("lightbox-next").click();
+    } else {
+      document.getElementById("lightbox-prev").click();
     }
-}
-
-function prevImage() {
-    if (currentIndex > 0) {
-        showImage(currentIndex - 1);
-    }
-}
-
-/* ===== Touch gestures ===== */
-let startX = 0;
-let startY = 0;
-
-lightbox.addEventListener("touchstart", (e) => {
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-}, { passive: false });
-
-lightbox.addEventListener("touchmove", (e) => {
-    e.preventDefault();
-}, { passive: false });
-
-lightbox.addEventListener("touchend", (e) => {
-    const endX = e.changedTouches[0].clientX;
-    const endY = e.changedTouches[0].clientY;
+  }
+});
+</script>
