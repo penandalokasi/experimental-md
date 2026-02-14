@@ -1,12 +1,16 @@
-/* ===== Repository config ===== */
+/* ===== Config ===== */
 const config = {
     user: "penandalokasi",
     repo: "experimental-md",
     branch: "main",
-    displayFolder: "images-optimized", // shown in gallery
-    originalFolder: "images"            // used for copy URL
+    displayFolder: "images-optimized",
+    originalFolder: "images"
 };
 
+/* GitHub Pages base path */
+const basePath = location.pathname.replace(/\/index\.html$/, "").replace(/\/$/, "");
+
+/* Elements */
 const gallery = document.getElementById("gallery");
 const lightbox = document.getElementById("lightbox");
 const lightboxImg = document.getElementById("lightboxImg");
@@ -14,54 +18,22 @@ const closeBtn = document.getElementById("closeBtn");
 const lightboxCopy = document.getElementById("lightboxCopy");
 
 let imageList = [];
-let originalMap = {};
 let currentIndex = 0;
 
-/* ===== API URLs ===== */
-const optimizedApiUrl = `https://api.github.com/repos/${config.user}/${config.repo}/contents/${config.displayFolder}?ref=${config.branch}`;
-const originalApiUrl = `https://api.github.com/repos/${config.user}/${config.repo}/contents/${config.originalFolder}?ref=${config.branch}`;
-
-/* ===== Load images ===== */
-async function loadImages() {
-    try {
-        const optimizedRes = await fetch(optimizedApiUrl);
-        const originalRes = await fetch(originalApiUrl);
-
-        if (!optimizedRes.ok) throw new Error("Optimized folder not found");
-        if (!originalRes.ok) throw new Error("Original folder not found");
-
-        const optimizedFiles = await optimizedRes.json();
-        const originalFiles = await originalRes.json();
-
-        /* Build original filename map */
-        originalFiles
-            .filter(file => file.type === "file")
-            .forEach(file => {
-                const base = file.name.replace(/\.[^/.]+$/, "");
-                originalMap[base] = file.name;
-            });
-
-        /* Optimized list */
-        imageList = optimizedFiles
-            .filter(file => file.type === "file")
-            .filter(file => file.name.match(/\.(jpg|jpeg|png|gif|webp|bmp|webm)$/i))
-            .sort((a, b) => b.name.localeCompare(a.name))
-            .map(file => file.name);
-
-        if (imageList.length === 0) {
-            gallery.innerHTML = "No images found in images-optimized.";
-            return;
-        }
-
+/* ===== Load index.json ===== */
+fetch(`${basePath}/${config.displayFolder}/index.json`)
+    .then(res => {
+        if (!res.ok) throw new Error("index.json not found");
+        return res.json();
+    })
+    .then(files => {
+        imageList = files.sort((a, b) => b.localeCompare(a));
         imageList.forEach((name, index) => createItem(name, index));
-
-    } catch (err) {
+    })
+    .catch(err => {
         console.error(err);
-        gallery.innerHTML = "Failed to load images. Check folder names and repository.";
-    }
-}
-
-loadImages();
+        gallery.innerHTML = "Failed to load image index.";
+    });
 
 /* ===== Lazy loading ===== */
 const observer = new IntersectionObserver((entries, obs) => {
@@ -79,7 +51,7 @@ function createItem(filename, index) {
     container.className = "item";
 
     const img = document.createElement("img");
-    img.dataset.src = `${config.displayFolder}/${filename}`;
+    img.dataset.src = `${basePath}/${config.displayFolder}/${filename}`;
     img.draggable = false;
     img.alt = filename;
 
@@ -94,4 +66,53 @@ function createItem(filename, index) {
     };
 
     container.appendChild(img);
-    container.append
+    container.appendChild(btn);
+    gallery.appendChild(container);
+}
+
+/* ===== Copy original URL ===== */
+/* Converts optimized name -> original base name only */
+function getRawUrl(optimizedFilename) {
+    const base = optimizedFilename.replace(/\.[^/.]+$/, "");
+    return `https://raw.githubusercontent.com/${config.user}/${config.repo}/${config.branch}/${config.originalFolder}/${base}`;
+}
+
+function copyUrl(filename, button) {
+    const url = getRawUrl(filename);
+    navigator.clipboard.writeText(url).then(() => {
+        if (button) {
+            const original = button.textContent;
+            button.textContent = "Copied";
+            setTimeout(() => button.textContent = original, 1200);
+        }
+    });
+}
+
+/* ===== Lightbox ===== */
+function openLightbox(index) {
+    currentIndex = index;
+    showImage(index);
+    lightbox.classList.remove("hidden");
+    document.body.classList.add("no-scroll");
+}
+
+function closeLightbox() {
+    lightbox.classList.add("hidden");
+    document.body.classList.remove("no-scroll");
+}
+
+function showImage(index) {
+    if (index < 0 || index >= imageList.length) return;
+    currentIndex = index;
+    lightboxImg.src = `${basePath}/${config.displayFolder}/${imageList[index]}`;
+}
+
+closeBtn.onclick = closeLightbox;
+
+lightbox.onclick = (e) => {
+    if (e.target === lightbox) closeLightbox();
+};
+
+lightboxCopy.onclick = () => {
+    copyUrl(imageList[currentIndex], lightboxCopy);
+};
