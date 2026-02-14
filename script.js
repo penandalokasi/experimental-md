@@ -177,6 +177,9 @@ function addSideNav(){
   right.onclick=()=>navigate("next");
 }
 
+/* ===== Copy Button ===== */
+lightboxCopy.onclick=()=>copyUrl(imageList[currentIndex],lightboxCopy);
+
 /* ===== Close Button ===== */
 closeBtn.onclick=closeLightbox;
 lightbox.onclick=e=>{if(e.target===lightbox) closeLightbox();}
