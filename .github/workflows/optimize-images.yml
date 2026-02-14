@@ -1,27 +1,3 @@
-name: Optimize Media
-
-on:
-  push:
-    paths:
-      - "images/**"
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-jobs:
-  optimize:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick ffmpeg jq
-
       - name: Optimize media
         run: |
           mkdir -p images-optimized
@@ -40,12 +16,16 @@ jobs:
               jpg|jpeg|png)
                 output="images-optimized/$name.webp"
 
-                if [ -f "$output" ] && [ "$file" -ot "$output" ]; then
-                  echo "Skipping $filename (up to date)"
-                  continue
+                if [ -f "$output" ]; then
+                  if [ "$file" -ot "$output" ]; then
+                    echo "Skipping $filename (WebP up to date)"
+                    continue
+                  else
+                    echo "Reprocessing $filename (updated)"
+                  fi
+                else
+                  echo "Processing $filename (new)"
                 fi
-
-                echo "Processing image $filename"
 
                 convert "$file[0]" \
                   -strip \
@@ -58,14 +38,19 @@ jobs:
               gif)
                 output="images-optimized/$name.webm"
 
-                if [ -f "$output" ] && [ "$file" -ot "$output" ]; then
-                  echo "Skipping $filename (up to date)"
-                  continue
+                if [ -f "$output" ]; then
+                  # Skip if output is newer than source
+                  if [ "$file" -ot "$output" ]; then
+                    echo "Skipping $filename (WebM up to date)"
+                    continue
+                  else
+                    echo "Reprocessing $filename (updated)"
+                  fi
+                else
+                  echo "Processing GIF $filename (new)"
                 fi
 
-                echo "Converting GIF $filename"
-
-                ffmpeg -y -i "$file" \
+                ffmpeg -y -loglevel error -i "$file" \
                   -vf "scale=1600:-2:flags=lanczos,fps=15" \
                   -c:v libvpx-vp9 \
                   -b:v 0 \
@@ -81,16 +66,54 @@ jobs:
             esac
           done
 
+
       - name: Generate index.json
         run: |
           echo "Generating index.json"
 
-          cd images-optimized
+          output="images-optimized/index.json"
+          echo "[" > "$output"
 
-          # List only media files, sort descending (newest first)
-          ls -1 *.webp *.webm 2>/dev/null | sort -r | jq -R . | jq -s . > index.json
+          first=true
 
-          cd ..
+          # Sort originals by filename descending (newest first)
+          for file in $(ls -1 images | sort -r); do
+            name="${file%.*}"
+            ext="${file##*.}"
+            ext_lower=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
+
+            case "$ext_lower" in
+              jpg|jpeg|png)
+                optimized="$name.webp"
+                ;;
+              gif)
+                optimized="$name.webm"
+                ;;
+              *)
+                continue
+                ;;
+            esac
+
+            # Skip if optimized file doesn't exist (safety)
+            if [ ! -f "images-optimized/$optimized" ]; then
+              continue
+            fi
+
+            if [ "$first" = true ]; then
+              first=false
+            else
+              echo "," >> "$output"
+            fi
+
+            echo "  {" >> "$output"
+            echo "    \"optimized\": \"$optimized\"," >> "$output"
+            echo "    \"original\": \"$file\"" >> "$output"
+            echo "  }" >> "$output"
+
+          done
+
+          echo "]" >> "$output"
+
 
       - name: Commit changes
         run: |
